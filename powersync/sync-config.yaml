@@ -22,3 +22,13 @@ streams:
       - SELECT * FROM space_members WHERE space_id IN (SELECT space_id FROM space_members WHERE account_id = auth.user_id() AND status = 'active')
       - SELECT * FROM people WHERE space_id IN (SELECT space_id FROM space_members WHERE account_id = auth.user_id() AND status = 'active')
       - SELECT * FROM personal_profiles WHERE space_id IN (SELECT space_id FROM space_members WHERE account_id = auth.user_id() AND status = 'active')
+
+  # Catálogos de Severa: iguales para todos, de solo lectura (funcionan sin conexión).
+  catalogos:
+    auto_subscribe: true
+    queries:
+      - SELECT code AS id, code, name, hemisphere, level, summary, minimum, sensitive, min_age, sort_order FROM neurons
+      - SELECT * FROM synapses
+      - SELECT code AS id, code, name, icon, main_action, tools, card_fields, beta_priority, status, sort_order FROM trades
+      - SELECT * FROM holidays
+      - SELECT code AS id, code, name, kind, unit, direction, period, suggested_target, min_age, sort_order FROM habit_templates

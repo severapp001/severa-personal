@@ -111,6 +111,61 @@ const devices = new Table({
   ...common,
 });
 
+// Catálogos de Severa (solo lectura). La llave «code» llega también como id.
+const neurons = new Table({
+  code: column.text,
+  name: column.text,
+  hemisphere: column.text,
+  level: column.integer,
+  summary: column.text,
+  minimum: column.text,
+  sensitive: column.integer,
+  min_age: column.integer,
+  sort_order: column.integer,
+});
+
+const synapses = new Table({
+  neuron_a: column.text,
+  neuron_b: column.text,
+  crosses: column.text,
+  confirmed: column.integer,
+});
+
+// tools llega como texto JSON (lista de códigos de neuronas de Trabajo).
+const trades = new Table({
+  code: column.text,
+  name: column.text,
+  icon: column.text,
+  main_action: column.text,
+  tools: column.text,
+  card_fields: column.text,
+  beta_priority: column.integer,
+  status: column.text,
+  sort_order: column.integer,
+});
+
+const holidays = new Table(
+  {
+    date: column.text,
+    name: column.text,
+    kind: column.text,
+    region: column.text,
+  },
+  { indexes: { date: ['date'] } },
+);
+
+const habit_templates = new Table({
+  code: column.text,
+  name: column.text,
+  kind: column.text,
+  unit: column.text,
+  direction: column.text,
+  period: column.text,
+  suggested_target: column.real,
+  min_age: column.integer,
+  sort_order: column.integer,
+});
+
 export const AppSchema = new Schema({
   accounts,
   spaces,
@@ -120,6 +175,11 @@ export const AppSchema = new Schema({
   user_preferences,
   consents,
   devices,
+  neurons,
+  synapses,
+  trades,
+  holidays,
+  habit_templates,
 });
 
 export type LocalDatabase = (typeof AppSchema)['types'];

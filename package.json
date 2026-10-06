@@ -4,21 +4,23 @@
   "version": "1.0.0",
   "dependencies": {
     "@expo-google-fonts/manrope": "^0.4.2",
-    "@expo/ui": "~57.0.21",
+    "@expo/ui": "~57.0.22",
     "@op-engineering/op-sqlite": "^18.2.5",
     "@powersync/adapter-sql-js": "^0.0.25",
     "@powersync/common": "^2.3.1",
     "@powersync/react": "^2.0.2",
     "@powersync/react-native": "^2.3.1",
     "@supabase/supabase-js": "^2.117.2",
-    "expo": "~57.0.26",
+    "expo": "~57.0.27",
     "expo-constants": "~57.0.20",
+    "expo-crypto": "~57.0.3",
+    "expo-dev-client": "~57.0.19",
     "expo-device": "~57.0.2",
     "expo-font": "~57.0.4",
     "expo-glass-effect": "~57.0.4",
     "expo-image": "~57.0.5",
-    "expo-linking": "~57.0.11",
-    "expo-router": "~57.0.24",
+    "expo-linking": "~57.0.12",
+    "expo-router": "~57.0.25",
     "expo-secure-store": "~57.0.4",
     "expo-splash-screen": "~57.0.9",
     "expo-status-bar": "~57.0.1",
@@ -60,7 +62,8 @@
     "db:stop": "supabase stop",
     "db:reset": "supabase db reset",
     "db:test": "supabase test db",
-    "assets:logo": "node scripts/generate-logo-assets.js"
+    "assets:logo": "node scripts/generate-logo-assets.js",
+    "build:dev:android": "eas build --profile development --platform android"
   },
   "private": true,
   "jest": {
@@ -69,5 +72,8 @@
       "/node_modules/",
       "/supabase/"
     ]
+  },
+  "op-sqlite": {
+    "sqlcipher": true
   }
 }
