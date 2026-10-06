@@ -42,6 +42,13 @@
       "typedRoutes": true,
       "reactCompiler": true
     },
-    "backgroundColor": "#0B0B0C"
+    "backgroundColor": "#0B0B0C",
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "cdd196e7-68f0-453c-a496-c878053349dd"
+      }
+    },
+    "owner": "severa001"
   }
 }
