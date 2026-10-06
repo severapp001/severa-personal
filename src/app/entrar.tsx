@@ -1,10 +1,13 @@
 import { router } from 'expo-router';
 import { useRef, useState } from 'react';
-import type { TextInput } from 'react-native';
+import { View, type TextInput } from 'react-native';
 
 import { useAuth } from '@/data/auth';
 import { authErrorMessage, isEmailNotConfirmed } from '@/features/account/authErrors';
+import { useTheme } from '@/theme/ThemeProvider';
+import { fonts } from '@/theme/tokens';
 import { AppText, Button, Notice, Screen, TextField } from '@/ui';
+import { Logo } from '@/ui/Logo';
 
 // F01 · Entrar con correo y contraseña.
 export default function EntrarScreen() {
@@ -14,6 +17,7 @@ export default function EntrarScreen() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const passwordRef = useRef<TextInput>(null);
+  const { colors } = useTheme();
 
   async function onSubmit() {
     if (!email.trim() || !password) {
@@ -38,9 +42,10 @@ export default function EntrarScreen() {
 
   return (
     <Screen>
-      <AppText variant="caption" muted style={{ letterSpacing: 2 }}>
-        SEVERA
-      </AppText>
+      <View style={{ alignItems: 'center', gap: 12, paddingTop: 24, paddingBottom: 8 }}>
+        <Logo size={96} boxed={!colors.isDark} />
+        <AppText style={{ fontFamily: fonts.semibold, fontSize: 24, letterSpacing: 6 }}>SEVERA</AppText>
+      </View>
       <AppText variant="title">Entrar</AppText>
       <AppText muted>Tu vida y tu trabajo, en un solo cerebro.</AppText>
 

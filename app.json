@@ -8,7 +8,7 @@
     "scheme": "severa",
     "userInterfaceStyle": "dark",
     "ios": {
-      "icon": "./assets/expo.icon",
+      "icon": "./assets/images/icon.png",
       "bundleIdentifier": "cl.severa.personal",
       "supportsTablet": false
     },
@@ -33,7 +33,7 @@
         {
           "backgroundColor": "#0B0B0C",
           "image": "./assets/images/splash-icon.png",
-          "imageWidth": 76
+          "imageWidth": 160
         }
       ],
       "expo-secure-store"
