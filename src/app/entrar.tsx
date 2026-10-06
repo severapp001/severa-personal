@@ -70,6 +70,11 @@ export default function EntrarScreen() {
         onSubmitEditing={onSubmit}
       />
       <Button label="Entrar" onPress={onSubmit} loading={busy} />
+      <Button
+        label="¿Olvidaste tu contraseña?"
+        kind="link"
+        onPress={() => router.push({ pathname: '/recuperar', params: { email: email.trim().toLowerCase() } })}
+      />
       <Button label="Crear una cuenta" kind="link" onPress={() => router.push('/crear-cuenta')} />
     </Screen>
   );

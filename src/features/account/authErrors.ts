@@ -2,9 +2,10 @@
 type MaybeAuthError = { code?: string; message?: string; status?: number } | null | undefined;
 
 const byCode: Record<string, string> = {
-  invalid_credentials: 'El correo o la contraseña no coinciden.',
+  invalid_credentials: 'El correo o la contraseña no coinciden. Si no la recuerdas, toca «¿Olvidaste tu contraseña?».',
+  same_password: 'La contraseña nueva debe ser distinta de la anterior.',
   email_not_confirmed: 'Falta verificar tu correo. Te lo enviamos de nuevo.',
-  user_already_exists: 'Ya existe una cuenta con ese correo. Prueba entrar.',
+  user_already_exists: 'Ya existe una cuenta con ese correo. Entra con tu contraseña o recupérala.',
   email_exists: 'Ya existe una cuenta con ese correo. Prueba entrar.',
   weak_password: 'La contraseña debe tener al menos 8 caracteres, con letras y números.',
   otp_expired: 'El código o el enlace venció o no es correcto. Pide otro correo.',

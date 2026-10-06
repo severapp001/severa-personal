@@ -18,7 +18,7 @@ import { ThemeProvider, useTheme } from '@/theme/ThemeProvider';
 SplashScreen.preventAutoHideAsync();
 
 function RootNavigator() {
-  const { session, ready, loading } = useAuth();
+  const { session, ready, loading, recovering } = useAuth();
   const { colors } = useTheme();
   const [fontsLoaded] = useFonts({
     Manrope_400Regular,
@@ -34,7 +34,8 @@ function RootNavigator() {
   }, [booting]);
   if (booting) return null;
 
-  const inside = !!session && ready;
+  // Con el enlace de «cambiar contraseña» hay sesión, pero primero se escribe la clave nueva.
+  const inside = !!session && ready && !recovering;
   return (
     <>
       <StatusBar style={colors.isDark ? 'light' : 'dark'} />
@@ -47,6 +48,8 @@ function RootNavigator() {
           <Stack.Screen name="crear-cuenta" />
           <Stack.Screen name="verificar" />
           <Stack.Screen name="verificado" />
+          <Stack.Screen name="recuperar" />
+          <Stack.Screen name="nueva-clave" />
         </Stack.Protected>
       </Stack>
     </>

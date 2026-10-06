@@ -1,14 +1,22 @@
-// Lee el enlace con el que vuelve la persona después de tocar «Confirmar» en el correo.
-// Supabase devuelve los datos de la sesión en el fragmento (#access_token=…) o un error.
+// Lee el enlace con el que vuelve la persona después de tocar el botón del correo
+// (confirmar el correo o cambiar la contraseña). Supabase devuelve los datos de la sesión
+// en el fragmento (#access_token=…&type=signup|recovery) o un error.
+
+export type AuthLinkType = 'signup' | 'recovery' | 'other';
 
 export type AuthRedirect =
-  | { kind: 'session'; accessToken: string; refreshToken: string }
+  | { kind: 'session'; accessToken: string; refreshToken: string; type: AuthLinkType }
   | { kind: 'code'; code: string }
   | { kind: 'error'; code: string; description: string }
   | { kind: 'none' };
 
 function params(part: string): URLSearchParams {
   return new URLSearchParams(part.replace(/^[#?]/, ''));
+}
+
+function linkType(value: string | null): AuthLinkType {
+  if (value === 'signup' || value === 'recovery') return value;
+  return 'other';
 }
 
 export function parseAuthRedirect(url: string): AuthRedirect {
@@ -24,7 +32,7 @@ export function parseAuthRedirect(url: string): AuthRedirect {
 
   const accessToken = get('access_token');
   const refreshToken = get('refresh_token');
-  if (accessToken && refreshToken) return { kind: 'session', accessToken, refreshToken };
+  if (accessToken && refreshToken) return { kind: 'session', accessToken, refreshToken, type: linkType(get('type')) };
 
   const code = get('code');
   if (code) return { kind: 'code', code };

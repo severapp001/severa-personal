@@ -14,19 +14,25 @@ type AuthState = {
   ready: boolean;
   loading: boolean;
   bootstrapError: string | null;
+  /** Entró con el enlace de «cambiar contraseña»: falta escribir la nueva antes de seguir. */
+  recovering: boolean;
   signUp: (input: SignUpInput) => Promise<void>;
   verifyEmail: (email: string, code: string) => Promise<void>;
   resendCode: (email: string) => Promise<void>;
   /** Abre la sesión con el enlace de «Confirmar» del correo. */
   completeFromUrl: (url: string) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
+  requestPasswordReset: (email: string) => Promise<void>;
+  updatePassword: (password: string) => Promise<void>;
   signOut: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthState | null>(null);
 
-// Adónde vuelve el enlace del correo: severa://verificado (o exp://…/--/verificado en Expo Go).
+// Adónde vuelven los enlaces del correo: severa://verificado y severa://nueva-clave
+// (en Expo Go, exp://…/--/verificado; en la web, http://localhost:8081/verificado).
 const emailRedirectTo = () => Linking.createURL('verificado');
+const recoveryRedirectTo = () => Linking.createURL('nueva-clave');
 
 // Crea el espacio personal, la persona «yo» y los consentimientos con los datos
 // que la persona dio al registrarse (quedan en user_metadata hasta este momento).
@@ -50,6 +56,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   const [loading, setLoading] = useState(true);
   const [bootstrapError, setBootstrapError] = useState<string | null>(null);
+  const [recovering, setRecovering] = useState(false);
 
   const onSession = useCallback(async (next: Session | null) => {
     setSession(next);
@@ -87,8 +94,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       ready,
       loading,
       bootstrapError,
+      recovering,
       async signUp({ name, birthDate, email, password }) {
-        const { error } = await supabase.auth.signUp({
+        const { data, error } = await supabase.auth.signUp({
           email: email.trim().toLowerCase(),
           password,
           options: {
@@ -97,6 +105,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           },
         });
         if (error) throw error;
+        // Si el correo ya tiene cuenta, Supabase responde «ok» sin enviar nada (para no revelar
+        // qué correos existen); la señal es que el usuario vuelve sin identidades.
+        if (data.user && (data.user.identities?.length ?? 0) === 0) {
+          throw Object.assign(new Error('user already exists'), { code: 'user_already_exists' });
+        }
       },
       async verifyEmail(email, code) {
         const { error } = await supabase.auth.verifyOtp({ email: email.trim().toLowerCase(), token: code.trim(), type: 'email' });
@@ -113,6 +126,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       async completeFromUrl(url) {
         const result = parseAuthRedirect(url);
         if (result.kind === 'session') {
+          if (result.type === 'recovery') setRecovering(true);
           const { error } = await supabase.auth.setSession({
             access_token: result.accessToken,
             refresh_token: result.refreshToken,
@@ -129,11 +143,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const { error } = await supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password });
         if (error) throw error;
       },
+      async requestPasswordReset(email) {
+        const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
+          redirectTo: recoveryRedirectTo(),
+        });
+        if (error) throw error;
+      },
+      async updatePassword(password) {
+        const { error } = await supabase.auth.updateUser({ password });
+        if (error) throw error;
+        setRecovering(false);
+      },
       async signOut() {
+        setRecovering(false);
         await supabase.auth.signOut();
       },
     }),
-    [session, ready, loading, bootstrapError],
+    [session, ready, loading, bootstrapError, recovering],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

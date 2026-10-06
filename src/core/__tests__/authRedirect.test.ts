@@ -4,12 +4,17 @@ import { parseAuthRedirect } from '../authRedirect';
 describe('parseAuthRedirect', () => {
   it('lee la sesión del fragmento', () => {
     const url = 'severa://verificado#access_token=AAA&expires_in=3600&refresh_token=RRR&token_type=bearer&type=signup';
-    expect(parseAuthRedirect(url)).toEqual({ kind: 'session', accessToken: 'AAA', refreshToken: 'RRR' });
+    expect(parseAuthRedirect(url)).toEqual({ kind: 'session', accessToken: 'AAA', refreshToken: 'RRR', type: 'signup' });
+  });
+
+  it('reconoce el enlace para cambiar la contraseña', () => {
+    const url = 'severa://nueva-clave#access_token=A&refresh_token=R&type=recovery';
+    expect(parseAuthRedirect(url)).toMatchObject({ kind: 'session', type: 'recovery' });
   });
 
   it('funciona con la dirección de Expo Go', () => {
     const url = 'exp://192.168.1.20:8081/--/verificado#access_token=A&refresh_token=R';
-    expect(parseAuthRedirect(url)).toEqual({ kind: 'session', accessToken: 'A', refreshToken: 'R' });
+    expect(parseAuthRedirect(url)).toEqual({ kind: 'session', accessToken: 'A', refreshToken: 'R', type: 'other' });
   });
 
   it('lee el código del flujo PKCE', () => {
