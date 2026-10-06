@@ -1,56 +1,45 @@
-# Welcome to your Expo app 👋
+# Severa Personal — app
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+App móvil (Android + iOS) de Severa. Expo SDK 57 · React Native · TypeScript · Expo Router · Supabase.
+La documentación del producto vive en `../docs` (bóveda de Obsidian); este repositorio es solo la app.
 
-## Get started
+## Requisitos
+- Node 24 y npm
+- Docker Desktop (para Supabase local)
+- Supabase CLI
+- Expo Go en el teléfono, o un development build
 
-1. Install dependencies
-
-   ```bash
-   npm install
-   ```
-
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
+## Primera vez
 ```bash
-npm run reset-project
+npm install
+cp .env.example .env.local   # y pegar la llave publicable que muestra supabase start
+npm run db:start             # Supabase local: API 54321 · panel 54323 · correos de prueba 54324
+npm start                    # escanear el QR con Expo Go (mismo Wi-Fi que el computador)
+```
+Con Supabase local, la app usa sola la IP del computador para que el teléfono llegue al servidor.
+
+## Comandos
+| Comando | Qué hace |
+|---|---|
+| `npm start` | Servidor de desarrollo (Expo Go o development build) |
+| `npm run web` | La app en el navegador (para revisar pantallas) |
+| `npm run typecheck` · `npm run lint` · `npm test` | Tipos, lint y pruebas del dominio (`src/core`) |
+| `npm run db:reset` | Rehace la base local desde las migraciones |
+| `npm run db:test` | Pruebas de permisos (RLS) de `supabase/tests` |
+
+## Estructura
+```
+src/app/        rutas (Expo Router): entrar, crear-cuenta, verificar · (personal)/
+src/core/       dominio puro, sin dependencias del teléfono (se prueba con Jest)
+src/data/       Supabase, sesión, y luego PowerSync
+src/features/   una carpeta por neurona (módulo)
+src/ui/         componentes del sistema de diseño
+src/theme/      los 5 temas y sus pares de Trabajo
+supabase/       config, migraciones (siempre por CLI), plantillas de correo y pruebas
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
-
-### Other setup steps
-
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
-
-## Learn more
-
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+## Reglas
+- Las migraciones se crean con la CLI y nunca se pegan a mano en el panel.
+- Este proyecto usa su **propio** Supabase. Nunca el de SEVERA Talleres.
+- En `.env.local` solo van llaves públicas (`publishable`). La `secret` o `service_role` nunca van en la app.
+- Expo Go sirve para ver pantallas; lo que se entrega a otras personas sale del development build.
