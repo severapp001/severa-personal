@@ -5,6 +5,11 @@
   "dependencies": {
     "@expo-google-fonts/manrope": "^0.4.2",
     "@expo/ui": "~57.0.21",
+    "@op-engineering/op-sqlite": "^18.2.5",
+    "@powersync/adapter-sql-js": "^0.0.25",
+    "@powersync/common": "^2.3.1",
+    "@powersync/react": "^2.0.2",
+    "@powersync/react-native": "^2.3.1",
     "@supabase/supabase-js": "^2.117.2",
     "expo": "~57.0.26",
     "expo-constants": "~57.0.20",

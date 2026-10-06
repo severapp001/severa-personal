@@ -5,6 +5,7 @@ import { useAuth } from '@/data/auth';
 import { usePreferences } from '@/data/preferences';
 import { supabase } from '@/data/supabase';
 import { useAmountVisibility } from '@/features/privacy/useAmountVisibility';
+import { SyncStatus } from '@/features/sync/SyncStatus';
 import { useTheme } from '@/theme/ThemeProvider';
 import { themeNames, type ThemeKey } from '@/theme/tokens';
 import { Amount, AppText, Button, EyeButton, Screen } from '@/ui';
@@ -45,6 +46,8 @@ export default function HoyScreen() {
       <AppText muted>
         Tu cuenta está lista: {spaces === null ? '…' : `${spaces} espacio${spaces === 1 ? '' : 's'}`} · {session?.user.email}
       </AppText>
+
+      <SyncStatus />
 
       <View style={card}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>

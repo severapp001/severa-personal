@@ -1,0 +1,24 @@
+# Reglas de sincronización de Severa Personal (Sync Streams, PowerSync).
+# Se pegan en el panel de PowerSync → Sync Streams → Deploy.
+# Replican la RLS de Supabase: cada teléfono baja lo suyo y lo de los espacios
+# donde la persona es miembro activo (docs/04 Arquitectura/Reglas de acceso y cifrado.md).
+# PowerSync necesita una columna «id»: user_preferences la toma de account_id.
+config:
+  edition: 3
+
+streams:
+  mi_cuenta:
+    auto_subscribe: true
+    queries:
+      - SELECT * FROM accounts WHERE id = auth.user_id()
+      - SELECT account_id AS id, account_id, theme, work_theme, protection, start_mode, morning_summary, hide_amounts, notifications, upload_wifi_only, telegram, created_at, updated_at, version FROM user_preferences WHERE account_id = auth.user_id()
+      - SELECT * FROM consents WHERE account_id = auth.user_id()
+      - SELECT * FROM devices WHERE account_id = auth.user_id()
+
+  mis_espacios:
+    auto_subscribe: true
+    queries:
+      - SELECT * FROM spaces WHERE id IN (SELECT space_id FROM space_members WHERE account_id = auth.user_id() AND status = 'active')
+      - SELECT * FROM space_members WHERE space_id IN (SELECT space_id FROM space_members WHERE account_id = auth.user_id() AND status = 'active')
+      - SELECT * FROM people WHERE space_id IN (SELECT space_id FROM space_members WHERE account_id = auth.user_id() AND status = 'active')
+      - SELECT * FROM personal_profiles WHERE space_id IN (SELECT space_id FROM space_members WHERE account_id = auth.user_id() AND status = 'active')

@@ -13,6 +13,7 @@ import { useEffect } from 'react';
 
 import { AuthProvider, useAuth } from '@/data/auth';
 import { PreferencesProvider } from '@/data/preferences';
+import { PowerSyncProvider } from '@/data/powersync/PowerSyncProvider';
 import { ThemeProvider, useTheme } from '@/theme/ThemeProvider';
 
 SplashScreen.preventAutoHideAsync();
@@ -60,9 +61,11 @@ export default function RootLayout() {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <PreferencesProvider>
-          <RootNavigator />
-        </PreferencesProvider>
+        <PowerSyncProvider>
+          <PreferencesProvider>
+            <RootNavigator />
+          </PreferencesProvider>
+        </PowerSyncProvider>
       </AuthProvider>
     </ThemeProvider>
   );
