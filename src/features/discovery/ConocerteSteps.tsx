@@ -1,4 +1,3 @@
-import { BriefcaseIcon, HeartIcon, ImagesIcon, ListChecksIcon, PlantIcon, WalletIcon, type Icon } from 'phosphor-react-native';
 import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
@@ -6,6 +5,7 @@ import { GOALS, INTERESTS, NO_WORK, QUESTIONS, STUDY, type Question, type Trade 
 import { useTheme } from '@/theme/ThemeProvider';
 import { radius, space } from '@/theme/tokens';
 import { AppText, Button, Chip } from '@/ui';
+import { BriefcaseIcon, HeartIcon, ImagesIcon, ListChecksIcon, PlantIcon, WalletIcon, type Icon } from '@/ui/icons';
 
 // Pasos de Conocerte (F30, E3·18): necesidades → oficios → intereses → camino → plan rápido.
 

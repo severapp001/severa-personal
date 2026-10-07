@@ -1,4 +1,3 @@
-import { CaretLeftIcon } from 'phosphor-react-native';
 import { useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 
@@ -10,6 +9,7 @@ import { authErrorMessage } from '@/features/account/authErrors';
 import { GoalsStep, InterestsStep, PathStep, QuestionStep, TradesStep } from '@/features/discovery/ConocerteSteps';
 import { useTheme } from '@/theme/ThemeProvider';
 import { AppText, Button, Notice, Screen } from '@/ui';
+import { CaretLeftIcon } from '@/ui/icons';
 
 // F30 · Conocerte: de lo macro a lo micro, después de crear la cuenta. Al terminar se guarda
 // todo de una vez (save_onboarding) y se pasa al cerebro.

@@ -44,6 +44,7 @@
     "@resvg/resvg-js": "^2.6.2",
     "@types/jest": "^29.5.14",
     "@types/react": "~19.2.2",
+    "cross-env": "^10.1.0",
     "eslint": "^9.39.5",
     "eslint-config-expo": "~57.0.2",
     "jest": "^29.7.0",
@@ -63,7 +64,9 @@
     "db:reset": "supabase db reset",
     "db:test": "supabase test db",
     "assets:logo": "node scripts/generate-logo-assets.js",
-    "build:dev:android": "eas build --profile development --platform android"
+    "build:dev:android": "eas build --profile development --platform android",
+    "start:go": "cross-env SEVERA_EXPO_GO=1 expo start --go --tunnel",
+    "start:dev": "expo start --dev-client --tunnel"
   },
   "private": true,
   "jest": {

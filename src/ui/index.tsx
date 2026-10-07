@@ -13,12 +13,12 @@ import {
   type TextInputProps,
   type TextProps,
 } from 'react-native';
-import { EyeIcon, EyeSlashIcon } from 'phosphor-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { displayAmount } from '@/core/money';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fonts, radius, space } from '@/theme/tokens';
+import { EyeIcon, EyeSlashIcon } from './icons';
 
 type Variant = 'title' | 'subtitle' | 'body' | 'label' | 'caption';
 

@@ -22,12 +22,14 @@ function databaseKey(): string {
   return key;
 }
 
-function createDatabase(): PowerSyncDatabase {
+function createDatabase(): PowerSyncDatabase | null {
   // Solo en desarrollo: en producción __DEV__ es false, la rama desaparece y el adaptador
   // (SQLite compilado a JavaScript, que Hermes no puede precompilar) no entra al paquete.
   if (__DEV__ && isExpoGo) {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { SQLJSOpenFactory } = require('@powersync/adapter-sql-js') as typeof import('@powersync/adapter-sql-js');
+    const { SQLJSOpenFactory } = require('@powersync/adapter-sql-js') as Partial<typeof import('@powersync/adapter-sql-js')>;
+    // Sin el adaptador (servidor iniciado sin `npm run start:go`) la app sigue en línea, sin base local.
+    if (!SQLJSOpenFactory) return null;
     return new PowerSyncDatabase({ schema: AppSchema, factory: new SQLJSOpenFactory({ dbFilename: 'severa.db' }) });
   }
   return new PowerSyncDatabase({
