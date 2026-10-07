@@ -166,6 +166,44 @@ const habit_templates = new Table({
   sort_order: column.integer,
 });
 
+// Conocerte y el cerebro de la persona (F30). Las listas (text[]) llegan como texto JSON.
+const onboarding_answers = new Table({
+  account_id: column.text,
+  goals: column.text,
+  interests: column.text,
+  trades: column.text,
+  path: column.text,
+  plans: column.text,
+  answers: column.text,
+  completed_at: column.text,
+  ...common,
+});
+
+const user_neurons = new Table(
+  {
+    account_id: column.text,
+    neuron_code: column.text,
+    state: column.text,
+    how: column.text,
+    discovered_at: column.text,
+    off_at: column.text,
+    face_id: column.integer,
+    config: column.text,
+    ...common,
+  },
+  { indexes: { account: ['account_id'] } },
+);
+
+const neuron_suggestions = new Table({
+  account_id: column.text,
+  neuron_code: column.text,
+  reason: column.text,
+  shown_at: column.text,
+  answer: column.text,
+  answered_at: column.text,
+  created_at: column.text,
+});
+
 export const AppSchema = new Schema({
   accounts,
   spaces,
@@ -180,6 +218,9 @@ export const AppSchema = new Schema({
   trades,
   holidays,
   habit_templates,
+  onboarding_answers,
+  user_neurons,
+  neuron_suggestions,
 });
 
 export type LocalDatabase = (typeof AppSchema)['types'];
