@@ -9,17 +9,20 @@ import {
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 import { AuthProvider, useAuth } from '@/data/auth';
 import { PreferencesProvider } from '@/data/preferences';
 import { PowerSyncProvider } from '@/data/powersync/PowerSyncProvider';
+import { welcomeSeen } from '@/data/welcome';
 import { ThemeProvider, useTheme } from '@/theme/ThemeProvider';
 
 SplashScreen.preventAutoHideAsync();
 
 function RootNavigator() {
-  const { session, ready, loading, recovering } = useAuth();
+  const { session, ready, loading, recovering, onboarded } = useAuth();
+  // La bienvenida (logo vivo y presentación) solo la primera vez.
+  const [showWelcome] = useState(() => !welcomeSeen());
   const { colors } = useTheme();
   const [fontsLoaded] = useFonts({
     Manrope_400Regular,
@@ -41,8 +44,14 @@ function RootNavigator() {
     <>
       <StatusBar style={colors.isDark ? 'light' : 'dark'} />
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
-        <Stack.Protected guard={inside}>
+        <Stack.Protected guard={inside && onboarded}>
           <Stack.Screen name="(personal)" />
+        </Stack.Protected>
+        <Stack.Protected guard={inside && !onboarded}>
+          <Stack.Screen name="conocerte" />
+        </Stack.Protected>
+        <Stack.Protected guard={!inside && showWelcome}>
+          <Stack.Screen name="bienvenida" />
         </Stack.Protected>
         <Stack.Protected guard={!inside}>
           <Stack.Screen name="entrar" />

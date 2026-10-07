@@ -16,6 +16,9 @@ type AuthState = {
   bootstrapError: string | null;
   /** Entró con el enlace de «cambiar contraseña»: falta escribir la nueva antes de seguir. */
   recovering: boolean;
+  /** Ya completó Conocerte (F30). Si no, la app lo lleva ahí antes de Personal. */
+  onboarded: boolean;
+  markOnboarded: () => void;
   signUp: (input: SignUpInput) => Promise<void>;
   verifyEmail: (email: string, code: string) => Promise<void>;
   resendCode: (email: string) => Promise<void>;
@@ -57,6 +60,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [bootstrapError, setBootstrapError] = useState<string | null>(null);
   const [recovering, setRecovering] = useState(false);
+  const [onboarded, setOnboarded] = useState(false);
 
   const onSession = useCallback(async (next: Session | null) => {
     setSession(next);
@@ -66,6 +70,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     try {
       await ensureAccount(next);
+      const { data: answers } = await supabase.from('onboarding_answers').select('completed_at').maybeSingle();
+      setOnboarded(!!answers?.completed_at);
       setBootstrapError(null);
       setReady(true);
     } catch (e) {
@@ -95,6 +101,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       loading,
       bootstrapError,
       recovering,
+      onboarded,
+      markOnboarded() {
+        setOnboarded(true);
+      },
       async signUp({ name, birthDate, email, password }) {
         const { data, error } = await supabase.auth.signUp({
           email: email.trim().toLowerCase(),
@@ -159,7 +169,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await supabase.auth.signOut();
       },
     }),
-    [session, ready, loading, bootstrapError, recovering],
+    [session, ready, loading, bootstrapError, recovering, onboarded],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

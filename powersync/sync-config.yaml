@@ -14,6 +14,9 @@ streams:
       - SELECT account_id AS id, account_id, theme, work_theme, protection, start_mode, morning_summary, hide_amounts, notifications, upload_wifi_only, telegram, created_at, updated_at, version FROM user_preferences WHERE account_id = auth.user_id()
       - SELECT * FROM consents WHERE account_id = auth.user_id()
       - SELECT * FROM devices WHERE account_id = auth.user_id()
+      - SELECT account_id AS id, account_id, goals, interests, trades, path, plans, answers, completed_at, created_at, updated_at, version FROM onboarding_answers WHERE account_id = auth.user_id()
+      - SELECT * FROM user_neurons WHERE account_id = auth.user_id()
+      - SELECT * FROM neuron_suggestions WHERE account_id = auth.user_id()
 
   mis_espacios:
     auto_subscribe: true

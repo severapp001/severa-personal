@@ -1,9 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Switch, View } from 'react-native';
 
+import { ageOn } from '@/core/age';
+import { planModules, suggest } from '@/core/discovery';
 import { useAuth } from '@/data/auth';
+import { useNeurons, useNotInterested, useOnboarding, useSelfPerson, useSynapses, useTrades, useUserNeurons } from '@/data/discovery';
 import { usePreferences } from '@/data/preferences';
-import { supabase } from '@/data/supabase';
+import { Brain } from '@/features/discovery/Brain';
+import { NeuronSheet } from '@/features/discovery/NeuronSheet';
+import { SuggestionCard } from '@/features/discovery/SuggestionCard';
 import { useAmountVisibility } from '@/features/privacy/useAmountVisibility';
 import { SyncStatus } from '@/features/sync/SyncStatus';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -12,29 +17,39 @@ import { Amount, AppText, Button, EyeButton, Screen } from '@/ui';
 
 const THEMES: ThemeKey[] = ['gold', 'dark', 'blue', 'light', 'pink'];
 
-// Entrega 0: pantalla mínima que prueba la sesión, el espacio personal, los temas
-// y los montos ocultos con el ojo.
+// Inicio de Personal (entrega 1, en construcción): el cerebro con sus neuronas, la sugerencia
+// de hoy y, por ahora, los ajustes rápidos (temas, montos ocultos).
 export default function HoyScreen() {
   const { session, signOut } = useAuth();
+  const accountId = session?.user.id;
   const { colors, theme, mode, setMode } = useTheme();
   const { hideAmounts, setHideAmounts, setTheme } = usePreferences();
   const money = useAmountVisibility();
-  const [name, setName] = useState<string | null>(null);
-  const [spaces, setSpaces] = useState<number | null>(null);
 
-  useEffect(() => {
-    supabase
-      .from('people')
-      .select('name')
-      .eq('type', 'self')
-      .maybeSingle()
-      .then(({ data }) => setName(data?.name ?? null));
-    supabase
-      .from('spaces')
-      .select('id', { count: 'exact', head: true })
-      .then(({ count }) => setSpaces(count ?? 0));
-  }, [session?.user.id]);
+  const person = useSelfPerson(accountId);
+  const { neurons } = useNeurons();
+  const synapses = useSynapses();
+  const { trades } = useTrades();
+  const states = useUserNeurons(accountId);
+  const onboarding = useOnboarding(accountId);
+  const notInterested = useNotInterested(accountId);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [skip, setSkip] = useState(0);
 
+  const age = person?.birthDate ? ageOn(new Date(`${person.birthDate}T12:00:00`)) : undefined;
+  const suggestion = useMemo(() => {
+    if (!neurons.length) return null;
+    const modules = onboarding ? planModules(onboarding.goals, onboarding.trades, trades).modules : [];
+    return suggest(neurons, synapses, states, {
+      interests: onboarding?.interests ?? [],
+      planModules: modules,
+      notInterested,
+      skip,
+      age,
+    });
+  }, [neurons, synapses, states, onboarding, trades, notInterested, skip, age]);
+
+  const byCode = useMemo(() => Object.fromEntries(neurons.map((n) => [n.code, n])), [neurons]);
   const card = { backgroundColor: colors.surface, borderRadius: 22, padding: 16, gap: 12 } as const;
 
   return (
@@ -42,10 +57,30 @@ export default function HoyScreen() {
       <AppText variant="caption" muted style={{ letterSpacing: 2 }}>
         {mode === 'personal' ? 'PERSONAL' : 'TRABAJO'}
       </AppText>
-      <AppText variant="title">{name ? `Hola, ${name}` : 'Hola'}</AppText>
-      <AppText muted>
-        Tu cuenta está lista: {spaces === null ? '…' : `${spaces} espacio${spaces === 1 ? '' : 's'}`} · {session?.user.email}
-      </AppText>
+      <AppText variant="title">{person?.name ? `Hola, ${person.name}` : 'Hola'}</AppText>
+
+      <View style={card}>
+        <AppText variant="subtitle">Tu cerebro</AppText>
+        {neurons.length ? (
+          <Brain neurons={neurons} synapses={synapses} states={states} selected={selected} onSelect={setSelected} />
+        ) : (
+          <AppText variant="caption" muted>
+            Cargando tus neuronas…
+          </AppText>
+        )}
+        <AppText variant="caption" muted>
+          Toca un punto para ver qué es y cómo encenderlo.
+        </AppText>
+      </View>
+
+      {suggestion ? (
+        <SuggestionCard
+          suggestion={suggestion}
+          neuron={byCode[suggestion.code]}
+          onLater={() => setSkip((x) => x + 1)}
+          onOpen={() => setSelected(suggestion.code)}
+        />
+      ) : null}
 
       <SyncStatus />
 
@@ -91,10 +126,16 @@ export default function HoyScreen() {
         />
       </View>
 
-      <AppText variant="caption" muted>
-        Entrega 0 · cimientos. Lo que sigue: conocerte, tu rutina y el primer oficio.
-      </AppText>
       <Button label="Salir" kind="link" onPress={signOut} />
+
+      <NeuronSheet
+        neuron={selected ? byCode[selected] ?? null : null}
+        neurons={neurons}
+        synapses={synapses}
+        states={states}
+        age={age ?? null}
+        onClose={() => setSelected(null)}
+      />
     </Screen>
   );
 }

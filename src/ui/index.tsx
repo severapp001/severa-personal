@@ -172,6 +172,32 @@ export function Checkbox({ checked, onChange, children }: { checked: boolean; on
   );
 }
 
+/** Opción que se marca y desmarca (selección múltiple). `work` usa el color de Trabajo. */
+export function Chip({ label, selected, onPress, work }: { label: string; selected: boolean; onPress: () => void; work?: boolean }) {
+  const { colors } = useTheme();
+  const on = work ? colors.accent2 : colors.accent;
+  const onText = work ? (colors.isDark ? colors.bg : '#FFFFFF') : colors.onAccent;
+  return (
+    <Pressable
+      accessibilityRole="checkbox"
+      accessibilityState={{ checked: selected }}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.chip,
+        {
+          backgroundColor: selected ? on : colors.surface,
+          borderColor: selected ? on : colors.line,
+          opacity: pressed ? 0.85 : 1,
+        },
+      ]}
+    >
+      <AppText variant="label" color={selected ? onText : colors.text}>
+        {label}
+      </AppText>
+    </Pressable>
+  );
+}
+
 /** Monto en pesos: muestra «$ •••••» mientras no se toque el ojo. */
 export function Amount({ value, visible, size = 'body' }: { value: number; visible: boolean; size?: 'body' | 'big' }) {
   return (
@@ -224,4 +250,5 @@ const styles = StyleSheet.create({
   checkBox: { width: 24, height: 24, borderRadius: 7, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
   notice: { borderRadius: radius.sm, padding: space.md },
   eye: { width: 44, height: 44, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center' },
+  chip: { minHeight: 44, paddingHorizontal: 16, borderRadius: radius.pill, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
 });
