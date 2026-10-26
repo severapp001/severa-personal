@@ -7,12 +7,13 @@ import { AppText, Button, Notice, Screen, TextField } from '@/ui';
 
 const RESEND_SECONDS = 60;
 
-// F01 · Verificar el correo. Con el correo estándar llega un enlace («Confirmar»);
-// con SMTP propio llega un código de 6 dígitos. La pantalla acepta los dos.
+// F01 · Verificar el correo. Hoy llega un enlace («Confirmar»). Con el correo propio (Resend)
+// llegará un código de 6 dígitos: el campo queda a mano, escondido hasta entonces.
 export default function VerificarScreen() {
   const { email = '' } = useLocalSearchParams<{ email?: string }>();
   const { verifyEmail, resendCode, bootstrapError } = useAuth();
   const [code, setCode] = useState('');
+  const [withCode, setWithCode] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -56,29 +57,33 @@ export default function VerificarScreen() {
     <Screen>
       <AppText variant="title">Revisa tu correo</AppText>
       <AppText muted>
-        Enviamos un correo a <AppText variant="body">{email}</AppText>. Ábrelo en este teléfono y toca
-        «Confirmar»: la app se abre sola. Si te llegó un código, escríbelo aquí.
+        Te enviamos un enlace a <AppText variant="body">{email}</AppText>. Ábrelo en este teléfono y toca
+        «Confirmar»: la app se abre sola.
       </AppText>
 
       {bootstrapError ? <Notice text={authErrorMessage({ message: bootstrapError })} /> : null}
       {error ? <Notice text={error} /> : null}
       {info && !error ? <Notice text={info} tone="ok" /> : null}
 
-      <TextField
-        label="Código"
-        value={code}
-        onChangeText={(v) => {
-          const digits = v.replace(/\D/g, '').slice(0, 6);
-          setCode(digits);
-          if (digits.length === 6) onVerify(digits);
-        }}
-        keyboardType="number-pad"
-        autoComplete="one-time-code"
-        textContentType="oneTimeCode"
-        maxLength={6}
-        style={{ fontSize: 24, letterSpacing: 8, textAlign: 'center' }}
-      />
-      <Button label="Verificar" onPress={() => onVerify()} loading={busy} />
+      {withCode ? (
+        <>
+          <TextField
+            label="Código"
+            value={code}
+            onChangeText={(v) => {
+              const digits = v.replace(/\D/g, '').slice(0, 6);
+              setCode(digits);
+              if (digits.length === 6) onVerify(digits);
+            }}
+            keyboardType="number-pad"
+            autoComplete="one-time-code"
+            textContentType="oneTimeCode"
+            maxLength={6}
+            style={{ fontSize: 24, letterSpacing: 8, textAlign: 'center' }}
+          />
+          <Button label="Verificar" onPress={() => onVerify()} loading={busy} />
+        </>
+      ) : null}
       <Button
         label={wait > 0 ? `Reenviar el correo en ${wait} s` : 'Reenviar el correo'}
         kind="link"
@@ -86,8 +91,9 @@ export default function VerificarScreen() {
         onPress={onResend}
       />
       <AppText variant="caption" muted>
-        Si confirmaste desde otro dispositivo, vuelve y entra con tu contraseña.
+        ¿No lo ves? Revisa la carpeta de spam. Si confirmaste desde otro dispositivo, vuelve y entra con tu contraseña.
       </AppText>
+      {withCode ? null : <Button label="Me llegó un código" kind="link" onPress={() => setWithCode(true)} />}
       <Button label="Ir a entrar" kind="link" onPress={() => router.replace('/entrar')} />
     </Screen>
   );

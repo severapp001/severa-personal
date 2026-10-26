@@ -1,7 +1,8 @@
 import { useState } from 'react';
 
 import type { Neuron, NeuronState, Synapse, Trade } from '@/core/discovery';
-import { bool, invalidateRemote, list, useRows } from './live';
+import { bool, invalidateRemote, json, list, useRows } from './live';
+import { db } from './powersync/database';
 import { supabase } from './supabase';
 
 // Catálogos (solo lectura) y el estado del cerebro de la persona (F30, MD2).
@@ -70,6 +71,8 @@ export function useHabitTemplates() {
     name: String(r.name),
     direction: String(r.direction) as 'good' | 'reduce',
     min_age: Number(r.min_age),
+    target: r.suggested_target == null ? undefined : Number(r.suggested_target),
+    unit: (r.unit as string | null) ?? null,
   }));
 }
 
@@ -79,6 +82,8 @@ export type Onboarding = {
   trades: string[];
   path: 'quick' | 'calm' | null;
   plans: string[];
+  /** Respuestas del plan rápido por módulo, más «horario» (despierta y duerme). */
+  answers: Record<string, unknown>;
   completed: boolean;
 };
 
@@ -97,6 +102,7 @@ export function useOnboarding(accountId: string | undefined): Onboarding | null 
     trades: list(r.trades),
     path: (r.path as Onboarding['path']) ?? null,
     plans: list(r.plans),
+    answers: json(r.answers),
     completed: !!r.completed_at,
   };
 }
@@ -129,6 +135,19 @@ export async function saveOnboarding(input: {
     p_answers: input.answers,
     p_neurons: Object.entries(input.neurons).map(([code, state]) => ({ code, state })),
   });
+  if (error) throw error;
+  invalidateRemote();
+}
+
+/** Cambia una respuesta de Conocerte (por ejemplo, el día de pago desde Finanzas). En el teléfono
+ *  se escribe en la base local y sube sola; sin base local, directo al servidor. */
+export async function setOnboardingAnswer(accountId: string, current: Record<string, unknown>, key: string, value: unknown) {
+  const answers = { ...current, [key]: value };
+  if (db) {
+    await db.execute('UPDATE onboarding_answers SET answers = ?, updated_at = ? WHERE id = ?', [JSON.stringify(answers), new Date().toISOString(), accountId]);
+    return;
+  }
+  const { error } = await supabase.from('onboarding_answers').update({ answers }).eq('account_id', accountId);
   if (error) throw error;
   invalidateRemote();
 }

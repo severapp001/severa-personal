@@ -3,7 +3,6 @@ import { forwardRef, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -16,9 +15,11 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { displayAmount } from '@/core/money';
+import { passwordChecks } from '@/core/password';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fonts, radius, space } from '@/theme/tokens';
-import { EyeIcon, EyeSlashIcon } from './icons';
+import { tap } from './haptics';
+import { CheckIcon, EyeIcon, EyeSlashIcon } from './icons';
 
 type Variant = 'title' | 'subtitle' | 'body' | 'label' | 'caption';
 
@@ -57,7 +58,9 @@ export function Screen({ children, scroll = true }: { children: ReactNode; scrol
   );
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      {/* Android va de borde a borde: la ventana ya no se achica sola con el teclado, así que
+          en los dos sistemas se deja espacio abajo y el campo enfocado queda a la vista. */}
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         {body}
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -107,35 +110,55 @@ export function Button({
   );
 }
 
-export const TextField = forwardRef<TextInput, TextInputProps & { label: string; hint?: string; error?: string }>(
-  function TextField({ label, hint, error, style, ...props }, ref) {
+// Con `secureTextEntry` el campo trae un ojo para ver lo que se escribe. `footer` va bajo el campo
+// (por ejemplo, las reglas de la contraseña en vivo).
+export const TextField = forwardRef<TextInput, TextInputProps & { label: string; hint?: string; error?: string; footer?: ReactNode }>(
+  function TextField({ label, hint, error, footer, style, secureTextEntry, ...props }, ref) {
     const { colors } = useTheme();
     const [focused, setFocused] = useState(false);
+    const [revealed, setRevealed] = useState(false);
+    const Eye = revealed ? EyeSlashIcon : EyeIcon;
     return (
       <View style={{ gap: space.xs }}>
         <AppText variant="label">{label}</AppText>
-        <TextInput
-          ref={ref}
-          placeholderTextColor={colors.muted}
-          {...props}
-          onFocus={(e) => {
-            setFocused(true);
-            props.onFocus?.(e);
-          }}
-          onBlur={(e) => {
-            setFocused(false);
-            props.onBlur?.(e);
-          }}
-          style={[
-            styles.input,
-            {
-              backgroundColor: colors.surface,
-              color: colors.text,
-              borderColor: error ? colors.bad : focused ? colors.accent : colors.line,
-            },
-            style,
-          ]}
-        />
+        <View>
+          <TextInput
+            ref={ref}
+            placeholderTextColor={colors.muted}
+            {...props}
+            secureTextEntry={secureTextEntry && !revealed}
+            onFocus={(e) => {
+              setFocused(true);
+              props.onFocus?.(e);
+            }}
+            onBlur={(e) => {
+              setFocused(false);
+              props.onBlur?.(e);
+            }}
+            style={[
+              styles.input,
+              {
+                backgroundColor: colors.surface,
+                color: colors.text,
+                borderColor: error ? colors.bad : focused ? colors.accent : colors.line,
+              },
+              secureTextEntry && { paddingRight: 56 },
+              style,
+            ]}
+          />
+          {secureTextEntry ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={revealed ? 'Ocultar la contraseña' : 'Mostrar la contraseña'}
+              onPress={() => setRevealed((v) => !v)}
+              hitSlop={6}
+              style={styles.reveal}
+            >
+              <Eye size={22} color={colors.muted} />
+            </Pressable>
+          ) : null}
+        </View>
+        {footer}
         {error ? (
           <AppText variant="caption" color={colors.bad}>
             {error}
@@ -149,6 +172,23 @@ export const TextField = forwardRef<TextInput, TextInputProps & { label: string;
     );
   },
 );
+
+/** Las reglas de la contraseña, que se marcan mientras se escribe. */
+export function PasswordRules({ password }: { password: string }) {
+  const { colors } = useTheme();
+  return (
+    <View style={styles.rules} accessibilityLiveRegion="polite">
+      {passwordChecks(password).map((c) => (
+        <View key={c.key} style={[styles.rule, { backgroundColor: c.ok ? colors.okSoft : colors.surface2 }]}>
+          {c.ok ? <CheckIcon size={14} weight="bold" color={colors.ok} /> : null}
+          <AppText variant="caption" color={c.ok ? colors.ok : colors.muted} style={{ fontFamily: fonts.semibold, fontVariant: ['tabular-nums'] }}>
+            {c.label}
+          </AppText>
+        </View>
+      ))}
+    </View>
+  );
+}
 
 export function Checkbox({ checked, onChange, children }: { checked: boolean; onChange: (v: boolean) => void; children: ReactNode }) {
   const { colors } = useTheme();
@@ -181,7 +221,10 @@ export function Chip({ label, selected, onPress, work }: { label: string; select
     <Pressable
       accessibilityRole="checkbox"
       accessibilityState={{ checked: selected }}
-      onPress={onPress}
+      onPress={() => {
+        tap();
+        onPress();
+      }}
       style={({ pressed }) => [
         styles.chip,
         {
@@ -246,6 +289,9 @@ const styles = StyleSheet.create({
   button: { minHeight: 56, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', paddingHorizontal: space.lg },
   link: { minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   input: { minHeight: 52, borderRadius: radius.md, borderWidth: 1.5, paddingHorizontal: space.lg, fontFamily: fonts.medium, fontSize: 16 },
+  reveal: { position: 'absolute', right: 4, top: 0, bottom: 0, width: 48, alignItems: 'center', justifyContent: 'center' },
+  rules: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  rule: { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 4 },
   checkRow: { flexDirection: 'row', alignItems: 'center', gap: space.md, minHeight: 44 },
   checkBox: { width: 24, height: 24, borderRadius: 7, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
   notice: { borderRadius: radius.sm, padding: space.md },

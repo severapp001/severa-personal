@@ -3,10 +3,11 @@ import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator } from 'react-native';
 
+import { isValidPassword } from '@/core/password';
 import { useAuth } from '@/data/auth';
 import { authErrorMessage } from '@/features/account/authErrors';
 import { useTheme } from '@/theme/ThemeProvider';
-import { AppText, Button, Notice, Screen, TextField } from '@/ui';
+import { AppText, Button, Notice, PasswordRules, Screen, TextField } from '@/ui';
 
 // F06 · Aquí vuelve el enlace de «cambiar contraseña». Se abre la sesión de recuperación,
 // se escribe la contraseña nueva y recién ahí se entra a Personal.
@@ -25,7 +26,7 @@ export default function NuevaClaveScreen() {
   }, [url, completeFromUrl]);
 
   async function onSubmit() {
-    if (password.length < 8 || !/[A-Za-z]/.test(password) || !/\d/.test(password)) {
+    if (!isValidPassword(password)) {
       setError('Al menos 8 caracteres, con letras y números.');
       return;
     }
@@ -59,7 +60,7 @@ export default function NuevaClaveScreen() {
             secureTextEntry
             autoComplete="new-password"
             textContentType="newPassword"
-            hint="Al menos 8 caracteres, con letras y números."
+            footer={<PasswordRules password={password} />}
           />
           <TextField
             label="Repite la contraseña"

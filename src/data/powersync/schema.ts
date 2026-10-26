@@ -51,6 +51,7 @@ const people = new Table(
     breed: column.text,
     account_id: column.text,
     guardian_declared_at: column.text,
+    notes: column.text,
     created_by: column.text,
     deleted_at: column.text,
     origin: column.text,
@@ -204,7 +205,211 @@ const neuron_suggestions = new Table({
   created_at: column.text,
 });
 
+// ─── Módulos (18-10-2026): migración 20261018120000_modules.sql ────────────────
+const owned = {
+  space_id: column.text,
+  created_by: column.text,
+  deleted_at: column.text,
+  ...common,
+};
+
+const fin_accounts = new Table(
+  { name: column.text, kind: column.text, opening_balance: column.real, opening_date: column.text, credit_limit: column.real, archived: column.integer, ...owned },
+  { indexes: { space: ['space_id'] } },
+);
+const fin_categories = new Table({
+  code: column.text,
+  name: column.text,
+  kind: column.text,
+  icon: column.text,
+  for_work: column.integer,
+  sort_order: column.integer,
+  ...owned,
+});
+const fin_debts = new Table(
+  {
+    kind: column.text,
+    creditor: column.text,
+    original_amount: column.real,
+    installments_total: column.integer,
+    installment_amount: column.real,
+    rate: column.real,
+    start_date: column.text,
+    account_id: column.text,
+    status: column.text,
+    ...owned,
+  },
+  { indexes: { space: ['space_id'] } },
+);
+const fin_movements = new Table(
+  {
+    kind: column.text,
+    occurred_on: column.text,
+    amount: column.real,
+    account_id: column.text,
+    to_account_id: column.text,
+    category_id: column.text,
+    is_salary: column.integer,
+    payment_method: column.text,
+    description: column.text,
+    person_id: column.text,
+    debt_id: column.text,
+    interest: column.real,
+    origin_type: column.text,
+    origin_id: column.text,
+    detail: column.text,
+    ...owned,
+  },
+  { indexes: { date: ['space_id', 'occurred_on'], debt: ['debt_id'] } },
+);
+const fin_assets = new Table({ kind: column.text, name: column.text, value: column.real, valued_on: column.text, ...owned });
+
+const study_courses = new Table({
+  person_id: column.text,
+  name: column.text,
+  institution: column.text,
+  term: column.text,
+  teacher: column.text,
+  color: column.text,
+  pass_grade: column.real,
+  archived: column.integer,
+  ...owned,
+});
+const study_blocks = new Table(
+  { course_id: column.text, weekday: column.integer, starts_at: column.text, ends_at: column.text, room: column.text, ...owned },
+  { indexes: { course: ['course_id'] } },
+);
+const study_assessments = new Table(
+  { course_id: column.text, title: column.text, due_on: column.text, weight: column.real, grade: column.real, ...owned },
+  { indexes: { course: ['course_id'] } },
+);
+const cv_entries = new Table({
+  kind: column.text,
+  title: column.text,
+  organization: column.text,
+  started_on: column.text,
+  ended_on: column.text,
+  current: column.integer,
+  description: column.text,
+  sort_order: column.integer,
+  ...owned,
+});
+const habits = new Table({
+  template_code: column.text,
+  name: column.text,
+  direction: column.text,
+  daily_target: column.integer,
+  unit: column.text,
+  active: column.integer,
+  sort_order: column.integer,
+  ...owned,
+});
+const habit_logs = new Table(
+  { habit_id: column.text, day: column.text, count: column.integer, ...owned },
+  { indexes: { day: ['day'], habit: ['habit_id'] } },
+);
+
+// Agenda (MD4, 25-10-2026): migración 20261025150000_agenda.sql.
+const calendar_events = new Table(
+  {
+    title: column.text,
+    event_date: column.text,
+    starts_at: column.text,
+    ends_at: column.text,
+    layer: column.text,
+    repeat: column.text,
+    remind_minutes: column.integer,
+    location: column.text,
+    notes: column.text,
+    ...owned,
+  },
+  { indexes: { date: ['space_id', 'event_date'] } },
+);
+const tasks = new Table(
+  {
+    title: column.text,
+    notes: column.text,
+    due_on: column.text,
+    due_at: column.text,
+    status: column.text,
+    urgent: column.integer,
+    done_on: column.text,
+    moved_from: column.text,
+    ...owned,
+  },
+  { indexes: { due: ['space_id', 'due_on'] } },
+);
+const daily_priorities = new Table(
+  { day: column.text, origin_type: column.text, origin_id: column.text, status: column.text, sort_order: column.integer, ...owned },
+  { indexes: { day: ['space_id', 'day'] } },
+);
+
+// Diario y Gratitud (MD6, 25-10-2026): migración 20261025180000_journal.sql.
+const journal_days = new Table(
+  { day: column.text, mood: column.integer, body: column.text, activities: column.text, closed: column.integer, ...owned },
+  { indexes: { day: ['space_id', 'day'] } },
+);
+const gratitude_entries = new Table({ day: column.text, body: column.text, ...owned }, { indexes: { day: ['space_id', 'day'] } });
+
+// Biblia RV 1909 (25-10-2026): migración 20261025190000_bible.sql. Los libros son catálogo; el texto
+// se pide en línea y los capítulos ya leídos quedan guardados en el teléfono (bible_cache).
+const bible_books = new Table({ code: column.text, ord: column.integer, name: column.text, testament: column.text, chapters: column.integer });
+const bible_reads = new Table({ book: column.text, chapter: column.integer, read_on: column.text, ...owned }, { indexes: { chapter: ['book', 'chapter'] } });
+const bible_marks = new Table(
+  { book: column.text, chapter: column.integer, verse: column.integer, kind: column.text, body: column.text, ...owned },
+  { indexes: { chapter: ['book', 'chapter'] } },
+);
+const bible_cache = new Table({ book: column.text, chapter: column.integer, verses: column.text }, { localOnly: true, indexes: { chapter: ['book', 'chapter'] } });
+
+// Asistente (25-10-2026): lecciones que se sincronizan; las conversaciones quedan solo en el teléfono.
+const assistant_lessons = new Table({ kind: column.text, phrase: column.text, meaning: column.text, active: column.integer, ...owned });
+const assistant_conversations = new Table(
+  { context: column.text, refs: column.text, started_at: column.text },
+  { localOnly: true },
+);
+const assistant_messages = new Table(
+  { conversation_id: column.text, seq: column.integer, role: column.text, content: column.text, created_at: column.text },
+  { localOnly: true, indexes: { conversation: ['conversation_id', 'seq'] } },
+);
+
+// Solo en este teléfono (no se sincroniza): lo que se marca en Hoy mientras llegan las tablas
+// definitivas de hábitos, prioridades y jornada (MD5, MD7). id = «día:ítem».
+const day_marks = new Table(
+  {
+    day: column.text,
+    item: column.text,
+    value: column.integer,
+    text: column.text,
+    updated_at: column.text,
+  },
+  { localOnly: true, indexes: { day: ['day'] } },
+);
+
 export const AppSchema = new Schema({
+  day_marks,
+  calendar_events,
+  tasks,
+  daily_priorities,
+  journal_days,
+  gratitude_entries,
+  bible_books,
+  bible_reads,
+  bible_marks,
+  bible_cache,
+  assistant_lessons,
+  assistant_conversations,
+  assistant_messages,
+  fin_accounts,
+  fin_categories,
+  fin_debts,
+  fin_movements,
+  fin_assets,
+  study_courses,
+  study_blocks,
+  study_assessments,
+  cv_entries,
+  habits,
+  habit_logs,
   accounts,
   spaces,
   space_members,

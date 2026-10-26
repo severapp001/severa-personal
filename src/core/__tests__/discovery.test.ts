@@ -1,8 +1,11 @@
 import { describe, expect, it } from '@jest/globals';
 
 import {
+  dayLength,
   initialStates,
   layoutBrain,
+  MAX_QUESTIONS,
+  pickQuestions,
   planModules,
   questionList,
   suggest,
@@ -97,5 +100,28 @@ describe('layoutBrain', () => {
     expect(pos.finanzas.x).toBeLessThan(175);
     expect(pos.jornada.x).toBeGreaterThan(175);
     expect(pos.tu_rutina).toEqual({ x: 175, y: 262 });
+  });
+});
+
+describe('pickQuestions', () => {
+  it('hace como máximo cinco preguntas, primero las que más cambian el inicio', () => {
+    const modules = ['habitos', 'diario', 'tu_rutina', 'finanzas', 'gastos_compartidos', 'documentos', 'jornada', 'recorridos'];
+    const { ask, later } = pickQuestions(modules);
+    expect(ask).toHaveLength(MAX_QUESTIONS);
+    expect(ask.slice(0, 3)).toEqual(['finanzas', 'tu_rutina', 'jornada']);
+    expect(later).toContain('calendario');
+    expect([...ask, ...later].sort()).toEqual(questionList(modules).sort());
+  });
+
+  it('con pocas preguntas, las hace todas', () => {
+    expect(pickQuestions(['finanzas']).later).toEqual([]);
+  });
+});
+
+describe('dayLength', () => {
+  it('cuenta las horas despierto aunque se duerma pasada la medianoche', () => {
+    expect(dayLength('07:00', '23:00')).toEqual({ awake: 16, asleep: 8 });
+    expect(dayLength('06:30', '00:30')).toEqual({ awake: 18, asleep: 6 });
+    expect(dayLength('Varía', '23:00')).toBeNull();
   });
 });

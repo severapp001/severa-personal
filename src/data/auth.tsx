@@ -19,6 +19,8 @@ type AuthState = {
   /** Ya completó Conocerte (F30). Si no, la app lo lleva ahí antes de Personal. */
   onboarded: boolean;
   markOnboarded: () => void;
+  /** Vuelve a Conocerte sin crear otra cuenta (para probar en la beta). */
+  redoOnboarding: () => void;
   signUp: (input: SignUpInput) => Promise<void>;
   verifyEmail: (email: string, code: string) => Promise<void>;
   resendCode: (email: string) => Promise<void>;
@@ -104,6 +106,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       onboarded,
       markOnboarded() {
         setOnboarded(true);
+      },
+      redoOnboarding() {
+        setOnboarded(false);
       },
       async signUp({ name, birthDate, email, password }) {
         const { data, error } = await supabase.auth.signUp({

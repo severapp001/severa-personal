@@ -1,0 +1,99 @@
+import type { Assessment, Block } from '@/core/studies';
+import { useAuth } from './auth';
+import { useRows } from './live';
+import { deleteRecord, insertRecord, updateRecord, usePersonalSpace, useRecords } from './records';
+import { supabase } from './supabase';
+
+// Estudios, CV, Familia y Hábitos (migración 20261018120000_modules.sql).
+
+type V = Record<string, string | number | boolean | null>;
+
+function useWriter() {
+  const { session } = useAuth();
+  const space = usePersonalSpace();
+  const add = (table: string, values: V) => {
+    if (!space) throw new Error('Todavía no se carga tu espacio personal. Prueba de nuevo en un momento.');
+    return insertRecord(table, space, session?.user.id, values);
+  };
+  return { space, add };
+}
+
+// ─── Estudios ────────────────────────────────────────────────────────────────
+export type Course = { id: string; name: string; institution: string | null; term: string | null; teacher: string | null; pass_grade: number; archived: number | boolean | null; person_id: string | null };
+
+export function useStudies() {
+  const { space, add } = useWriter();
+  return {
+    space,
+    courses: useRecords<Course>('study_courses', space, 'archived, name'),
+    blocks: useRecords<Block>('study_blocks', space, 'weekday, starts_at'),
+    assessments: useRecords<Assessment>('study_assessments', space, 'due_on'),
+    addCourse: (v: { name: string; institution?: string | null; teacher?: string | null; term?: string | null; person_id?: string | null }) =>
+      add('study_courses', { name: v.name, institution: v.institution ?? null, teacher: v.teacher ?? null, term: v.term ?? null, person_id: v.person_id ?? null, pass_grade: 4.0, archived: false }),
+    addBlock: (v: { course_id: string; weekday: number; starts_at: string; ends_at: string; room?: string | null }) => add('study_blocks', { ...v, room: v.room ?? null }),
+    addAssessment: (v: { course_id: string; title: string; due_on: string | null; weight: number | null; grade: number | null }) => add('study_assessments', v),
+    setGrade: (id: string, grade: number | null) => updateRecord('study_assessments', id, { grade }),
+    remove: (table: 'study_courses' | 'study_blocks' | 'study_assessments', id: string) => deleteRecord(table, id),
+  };
+}
+
+// ─── CV ──────────────────────────────────────────────────────────────────────
+export type CvKind = 'job' | 'education' | 'course' | 'skill' | 'language' | 'achievement';
+export type CvEntry = { id: string; kind: CvKind; title: string; organization: string | null; started_on: string | null; ended_on: string | null; current: number | boolean | null; description: string | null };
+
+export function useCv() {
+  const { space, add } = useWriter();
+  return {
+    space,
+    entries: useRecords<CvEntry>('cv_entries', space, 'kind, current DESC, started_on DESC'),
+    addEntry: (v: Omit<CvEntry, 'id'>) => add('cv_entries', { ...v, current: !!v.current, sort_order: 0 }),
+    remove: (id: string) => deleteRecord('cv_entries', id),
+  };
+}
+
+// ─── Familia (people del núcleo) ─────────────────────────────────────────────
+export type Person = { id: string; type: 'self' | 'child' | 'pet' | 'other'; name: string; birth_date: string | null; relationship: string | null; species: string | null; breed: string | null; notes: string | null };
+
+export function useFamily() {
+  const { space, add } = useWriter();
+  const { data } = useRows<Person>(
+    "SELECT * FROM people WHERE space_id = ? AND deleted_at IS NULL AND type <> 'self' ORDER BY type, name",
+    [space ?? ''],
+    () => supabase.from('people').select('*').eq('space_id', space ?? '').neq('type', 'self').is('deleted_at', null),
+    `family:${space}`,
+  );
+  return {
+    space,
+    people: data,
+    addPerson: (v: { type: 'child' | 'pet' | 'other'; name: string; birth_date: string | null; relationship: string | null; species: string | null; notes: string | null }) =>
+      add('people', { ...v, origin: 'app' }),
+    updatePerson: (id: string, v: V) => updateRecord('people', id, v),
+    remove: (id: string) => deleteRecord('people', id),
+  };
+}
+
+// ─── Hábitos ─────────────────────────────────────────────────────────────────
+export type Habit = { id: string; template_code: string | null; name: string; direction: 'good' | 'reduce'; daily_target: number; unit: string | null; active: number | boolean | null };
+export type HabitLog = { id: string; habit_id: string; day: string; count: number };
+
+export function useHabits(day: string) {
+  const { space, add } = useWriter();
+  const habits = useRecords<Habit>('habits', space, 'sort_order, name', 'active = 1');
+  const logs = useRecords<HabitLog>('habit_logs', space, 'day', 'day = ?', [day]);
+  const countFor = (habitId: string) => logs.filter((l) => l.habit_id === habitId).reduce((s, l) => s + Number(l.count), 0);
+  return {
+    space,
+    habits,
+    logs,
+    countFor,
+    addHabit: (v: { name: string; direction: 'good' | 'reduce'; template_code?: string | null; daily_target?: number; unit?: string | null }) =>
+      add('habits', { name: v.name, direction: v.direction, template_code: v.template_code ?? null, daily_target: v.daily_target ?? 1, unit: v.unit ?? null, active: true, sort_order: 0 }),
+    archive: (id: string) => updateRecord('habits', id, { active: false }),
+    /** Suma (o resta, con −1) al conteo de hoy: un registro por toque, así dos teléfonos no se pisan. */
+    log: (habitId: string, delta: 1 | -1) => {
+      if (delta > 0) return add('habit_logs', { habit_id: habitId, day, count: 1 });
+      const last = [...logs].reverse().find((l) => l.habit_id === habitId && Number(l.count) > 0);
+      return last ? deleteRecord('habit_logs', last.id) : Promise.resolve();
+    },
+  };
+}

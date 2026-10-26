@@ -10,7 +10,27 @@ import { supabase } from '../supabase';
 export const powerSyncUrl = process.env.EXPO_PUBLIC_POWERSYNC_URL ?? '';
 
 // Tablas cuya llave en el servidor no se llama «id».
-const PRIMARY_KEY: Record<string, string> = { user_preferences: 'account_id' };
+const PRIMARY_KEY: Record<string, string> = { user_preferences: 'account_id', onboarding_answers: 'account_id' };
+
+// Columnas jsonb: en el teléfono son texto y al subir vuelven a ser objeto (si no, quedarían
+// guardadas como un texto JSON dentro de la columna).
+const JSON_COLUMNS: Record<string, string[]> = { onboarding_answers: ['answers'] };
+
+function withJson(table: string, data: Record<string, unknown>): Record<string, unknown> {
+  const cols = JSON_COLUMNS[table];
+  if (!cols) return data;
+  const out = { ...data };
+  for (const c of cols) {
+    if (typeof out[c] === 'string') {
+      try {
+        out[c] = JSON.parse(out[c] as string);
+      } catch {
+        // se deja tal cual: el servidor dirá si no sirve
+      }
+    }
+  }
+  return out;
+}
 
 // Errores que no se arreglan reintentando (dato inválido o sin permiso): se descartan
 // para que la cola no quede trabada. La auditoría y el aviso de conflicto llegan con las RPC.
@@ -40,9 +60,9 @@ export class SupabaseConnector implements PowerSyncBackendConnector {
         const table = supabase.from(op.table);
         let result: { error: { code?: string; message: string } | null };
         if (op.op === UpdateType.PUT) {
-          result = await table.upsert({ ...op.opData, [key]: op.id });
+          result = await table.upsert(withJson(op.table, { ...op.opData, [key]: op.id }));
         } else if (op.op === UpdateType.PATCH) {
-          result = await table.update(op.opData ?? {}).eq(key, op.id);
+          result = await table.update(withJson(op.table, op.opData ?? {})).eq(key, op.id);
         } else {
           result = await table.delete().eq(key, op.id);
         }

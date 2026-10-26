@@ -103,7 +103,8 @@ export function initialStates(
 }
 
 // Plan rápido: una pregunta por módulo (F30, E3·18).
-export type Question = { q: string; options: string[]; note?: string; kind?: 'payday' | 'habits' };
+// `multi`: se puede marcar más de una opción; `only` es la opción que deja fuera a las demás.
+export type Question = { q: string; options: string[]; note?: string; kind?: 'payday' | 'habits'; multi?: boolean; only?: string };
 export const QUESTIONS: Record<string, Question> = {
   finanzas: {
     q: '¿Qué día te pagan?',
@@ -111,44 +112,79 @@ export const QUESTIONS: Record<string, Question> = {
     note: 'Tu mes financiero va de un pago al siguiente. Si cambia según el mes (como en muchos Servicios públicos), anotas la fecha de cada mes.',
     kind: 'payday',
   },
-  gastos_compartidos: { q: '¿Compartes gastos con alguien?', options: ['Con mi pareja', 'En la casa', 'En viajes', 'Después'] },
-  documentos: { q: '¿Algún documento vence pronto?', options: ['Licencia de conducir', 'Permiso de circulación', 'Carnet', 'Después'], note: 'Te avisamos 30, 7 y 1 día antes.' },
+  gastos_compartidos: { q: '¿Con quién compartes gastos?', options: ['Con mi pareja', 'En la casa', 'En viajes', 'Con amigos'], multi: true },
+  documentos: { q: '¿Qué documentos vencen pronto?', options: ['Licencia de conducir', 'Permiso de circulación', 'Carnet', 'Pasaporte'], note: 'Te avisamos 30, 7 y 1 día antes.', multi: true },
   agenda_y_citas: { q: '¿Qué días atiendes?', options: ['Lunes a viernes', 'Lunes a sábado', 'Varía cada semana'] },
   clientes_y_pacientes: {
     q: '¿Agregamos a tu primer cliente?',
     options: ['Ahora', 'Después'],
     note: 'Son datos de terceros: se guardan protegidos y con su consentimiento.',
   },
-  cobros_y_boletas: { q: '¿Cómo te pagan?', options: ['Boleta de honorarios', 'Efectivo', 'Transferencia', 'Varias formas'], note: 'Con boleta, calculamos la retención del año.' },
+  cobros_y_boletas: { q: '¿Cómo te pagan?', options: ['Boleta de honorarios', 'Efectivo', 'Transferencia', 'Tarjeta'], note: 'Con boleta, calculamos la retención del año.', multi: true },
   calendario: { q: '¿Conectamos el calendario de tu teléfono?', options: ['Conectar', 'Después'], note: 'Severa lo lee, pero escribe solo en el suyo.' },
   prioridades: { q: '¿Algo que tengas que hacer hoy?', options: ['Escribir una tarea', 'Después'] },
   habitos: { q: '¿Qué quieres contar?', options: [], kind: 'habits' },
   salud: { q: '¿Tomas algún remedio?', options: ['Sí, lo agrego', 'Después'], note: 'Salud guarda datos sensibles: solo tú los ves.' },
   alimentacion: { q: '¿Anotamos tu peso y estatura?', options: ['Ahora', 'Después'], note: 'Severa acompaña: no recomienda dietas.' },
-  ejercicio: { q: '¿Qué ejercicio haces?', options: ['Gimnasio', 'Correr', 'Fútbol', 'Nada aún'] },
+  ejercicio: { q: '¿Qué ejercicio haces?', options: ['Gimnasio', 'Caminar', 'Correr', 'Bicicleta', 'Fútbol', 'Nada aún'], multi: true, only: 'Nada aún' },
   diario: { q: '¿Cierras el día con una nota?', options: ['Sí, en la noche', 'Después'] },
   tu_rutina: { q: '¿Cómo es tu rutina?', options: ['De día', 'Turnos', 'Faena', 'Según mi agenda', 'Variable'], note: 'Las horas las vemos después, en Tu rutina.' },
   jornada: { q: '¿Empiezas a una hora fija?', options: ['Sí', 'Depende del día'] },
   turnos_y_faenas: { q: '¿Cuál es tu sistema?', options: ['Cuarto turno', '4x4', '3 turnos', '14x14 u otro'] },
-  recorridos: { q: '¿En qué tipo de app trabajas?', options: ['Transporte', 'Delivery', 'Compras', 'Varias'] },
+  recorridos: { q: '¿En qué tipo de app trabajas?', options: ['Transporte', 'Delivery', 'Compras'], multi: true },
   gastos_del_trabajo: { q: '¿Cuánto gastas en bencina a la semana?', options: ['Menos de $20 mil', '$20 a $40 mil', 'Más de $40 mil', 'No sé'] },
-  ventas_y_productos: { q: '¿Qué vendes?', options: ['Comida', 'Ropa', 'Cosmética', 'Otro'] },
+  ventas_y_productos: { q: '¿Qué vendes?', options: ['Comida', 'Ropa', 'Cosmética', 'Otro'], multi: true },
   tareas_del_trabajo: { q: '¿Un pendiente del trabajo?', options: ['Escribir', 'Después'] },
-  ficha_al_terminar: { q: '¿Qué anotas al terminar una visita o atención?', options: ['Hallazgos y fotos', 'Lo que hice', 'Después'] },
+  ficha_al_terminar: { q: '¿Qué anotas al terminar una visita o atención?', options: ['Hallazgos', 'Fotos', 'Lo que hice', 'Lo que falta'], multi: true },
   documentos_laborales: { q: '¿Tienes documentos del trabajo que venzan?', options: ['Sí', 'Después'] },
   estudios: { q: '¿Dónde estudias?', options: ['Colegio', 'Universidad', 'Instituto', 'Curso'] },
-  familia_y_mascotas: { q: '¿Tienes a alguien a cargo?', options: ['Hijos', 'Mascota', 'Padres', 'Después'] },
+  familia_y_mascotas: { q: '¿A quién tienes a cargo?', options: ['Hijos', 'Mascotas', 'Padres', 'Otra persona'], multi: true },
   biblia: { q: '¿Activamos el pan de vida en la mañana?', options: ['Sí', 'Después'] },
   gratitud: { q: 'Una cosa buena de hoy', options: ['Escribir', 'Después'] },
   biografia: { q: '¿Agregamos tu primer recuerdo?', options: ['Ahora', 'Después'] },
   viajes: { q: '¿Un viaje próximo o reciente?', options: ['Agregar', 'Después'] },
 };
 
-export const SKIP_OPTIONS = new Set(['Después', 'Nada aún']);
-
 /** Módulos que tienen pregunta en el plan rápido (más Calendario y Prioridades). */
 export function questionList(modules: string[]): string[] {
   return [...modules, 'calendario', 'prioridades'].filter((m, i, all) => QUESTIONS[m] && m !== 'trabajo' && all.indexOf(m) === i);
+}
+
+// Conocerte cabe en 10 a 12 pantallas (prueba en el teléfono, 17-10-2026): el plan rápido hace
+// como máximo MAX_QUESTIONS preguntas, las que más cambian el inicio. Lo demás queda por completar.
+export const MAX_QUESTIONS = 5;
+const QUESTION_PRIORITY = [
+  'finanzas', 'tu_rutina', 'jornada', 'recorridos', 'habitos', 'agenda_y_citas', 'cobros_y_boletas',
+  'turnos_y_faenas', 'ventas_y_productos', 'salud', 'biblia', 'diario', 'estudios', 'gastos_del_trabajo',
+  'alimentacion', 'ejercicio', 'familia_y_mascotas', 'gastos_compartidos', 'documentos', 'prioridades', 'calendario',
+];
+const rank = (code: string) => {
+  const i = QUESTION_PRIORITY.indexOf(code);
+  return i === -1 ? QUESTION_PRIORITY.length : i;
+};
+
+/** Las preguntas que sí se hacen ahora, en orden de importancia; el resto queda para después. */
+export function pickQuestions(modules: string[], max = MAX_QUESTIONS): { ask: string[]; later: string[] } {
+  const all = [...questionList(modules)].sort((a, b) => rank(a) - rank(b));
+  return { ask: all.slice(0, max), later: all.slice(max) };
+}
+
+// Hora de despertar y de dormir (arman la línea del día). «Varía» deja la rutina para después.
+export const WAKE_TIMES = ['05:00', '05:30', '06:00', '06:30', '07:00', '07:30', '08:00', '09:00'];
+export const SLEEP_TIMES = ['21:30', '22:00', '22:30', '23:00', '23:30', '00:00', '00:30', '01:00'];
+export const VARIES = 'Varía';
+
+/** Horas despierto y de sueño entre dos horas «HH:MM» (el sueño cruza la medianoche). */
+export function dayLength(wake: string, sleep: string): { awake: number; asleep: number } | null {
+  const toMin = (t: string) => {
+    const m = /^(\d{2}):(\d{2})$/.exec(t);
+    return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+  };
+  const w = toMin(wake);
+  const s = toMin(sleep);
+  if (w === null || s === null) return null;
+  const awake = (s - w + 1440) % 1440 || 1440;
+  return { awake: awake / 60, asleep: (1440 - awake) / 60 };
 }
 
 export const GOOD_HABITS = ['agua', 'sueno', 'caminar', 'leer', 'entrenar', 'orar_meditar'];

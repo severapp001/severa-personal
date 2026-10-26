@@ -26,6 +26,34 @@ streams:
       - SELECT * FROM people WHERE space_id IN (SELECT space_id FROM space_members WHERE account_id = auth.user_id() AND status = 'active')
       - SELECT * FROM personal_profiles WHERE space_id IN (SELECT space_id FROM space_members WHERE account_id = auth.user_id() AND status = 'active')
 
+  # Módulos (18-10-2026): Finanzas, Estudios, CV y Hábitos, de los espacios donde es miembro activo.
+  mis_modulos:
+    auto_subscribe: true
+    queries:
+      - SELECT * FROM fin_accounts WHERE space_id IN (SELECT space_id FROM space_members WHERE account_id = auth.user_id() AND status = 'active')
+      - SELECT * FROM fin_categories WHERE space_id IN (SELECT space_id FROM space_members WHERE account_id = auth.user_id() AND status = 'active')
+      - SELECT * FROM fin_debts WHERE space_id IN (SELECT space_id FROM space_members WHERE account_id = auth.user_id() AND status = 'active')
+      - SELECT * FROM fin_movements WHERE space_id IN (SELECT space_id FROM space_members WHERE account_id = auth.user_id() AND status = 'active')
+      - SELECT * FROM fin_assets WHERE space_id IN (SELECT space_id FROM space_members WHERE account_id = auth.user_id() AND status = 'active')
+      - SELECT * FROM study_courses WHERE space_id IN (SELECT space_id FROM space_members WHERE account_id = auth.user_id() AND status = 'active')
+      - SELECT * FROM study_blocks WHERE space_id IN (SELECT space_id FROM space_members WHERE account_id = auth.user_id() AND status = 'active')
+      - SELECT * FROM study_assessments WHERE space_id IN (SELECT space_id FROM space_members WHERE account_id = auth.user_id() AND status = 'active')
+      - SELECT * FROM cv_entries WHERE space_id IN (SELECT space_id FROM space_members WHERE account_id = auth.user_id() AND status = 'active')
+      - SELECT * FROM habits WHERE space_id IN (SELECT space_id FROM space_members WHERE account_id = auth.user_id() AND status = 'active')
+      - SELECT * FROM habit_logs WHERE space_id IN (SELECT space_id FROM space_members WHERE account_id = auth.user_id() AND status = 'active')
+      # Agenda (25-10-2026): calendario, tareas y lo marcado en las prioridades del día.
+      - SELECT * FROM calendar_events WHERE space_id IN (SELECT space_id FROM space_members WHERE account_id = auth.user_id() AND status = 'active')
+      - SELECT * FROM tasks WHERE space_id IN (SELECT space_id FROM space_members WHERE account_id = auth.user_id() AND status = 'active')
+      - SELECT * FROM daily_priorities WHERE space_id IN (SELECT space_id FROM space_members WHERE account_id = auth.user_id() AND status = 'active')
+      # Diario y Gratitud (25-10-2026).
+      - SELECT * FROM journal_days WHERE space_id IN (SELECT space_id FROM space_members WHERE account_id = auth.user_id() AND status = 'active')
+      - SELECT * FROM gratitude_entries WHERE space_id IN (SELECT space_id FROM space_members WHERE account_id = auth.user_id() AND status = 'active')
+      # Biblia (25-10-2026): capítulos leídos, favoritos y reflexiones.
+      - SELECT * FROM bible_reads WHERE space_id IN (SELECT space_id FROM space_members WHERE account_id = auth.user_id() AND status = 'active')
+      - SELECT * FROM bible_marks WHERE space_id IN (SELECT space_id FROM space_members WHERE account_id = auth.user_id() AND status = 'active')
+      # Asistente (25-10-2026): lo que Severa aprendió de las correcciones del usuario.
+      - SELECT * FROM assistant_lessons WHERE space_id IN (SELECT space_id FROM space_members WHERE account_id = auth.user_id() AND status = 'active')
+
   # Catálogos de Severa: iguales para todos, de solo lectura (funcionan sin conexión).
   catalogos:
     auto_subscribe: true
@@ -35,3 +63,5 @@ streams:
       - SELECT code AS id, code, name, icon, main_action, tools, card_fields, beta_priority, status, sort_order FROM trades
       - SELECT * FROM holidays
       - SELECT code AS id, code, name, kind, unit, direction, period, suggested_target, min_age, sort_order FROM habit_templates
+      - SELECT * FROM fin_categories WHERE space_id IS NULL
+      - SELECT code AS id, code, ord, name, testament, chapters FROM bible_books

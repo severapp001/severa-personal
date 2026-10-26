@@ -393,6 +393,11 @@ deno_version = 2
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 
+# Asistente (25-10-2026): la función revisa la sesión por su cuenta (sirve con las llaves de
+# firma nuevas) y solo atiende las cuentas de ASSISTANT_ALLOWED_USERS.
+[functions.asistente]
+verify_jwt = false
+
 [analytics]
 enabled = true
 port = 54327

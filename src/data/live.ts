@@ -63,6 +63,19 @@ export const useRows: <T>(sql: string, params: unknown[], remote: Remote<T>, key
 /** Los booleanos llegan como 0/1 desde SQLite y como true/false desde Supabase. */
 export const bool = (v: unknown) => v === true || v === 1 || v === '1' || v === 'true';
 
+/** Los jsonb llegan como texto desde SQLite y como objeto desde Supabase. */
+export function json(v: unknown): Record<string, unknown> {
+  if (v && typeof v === 'object' && !Array.isArray(v)) return v as Record<string, unknown>;
+  if (typeof v === 'string' && v.startsWith('{')) {
+    try {
+      return JSON.parse(v) as Record<string, unknown>;
+    } catch {
+      return {};
+    }
+  }
+  return {};
+}
+
 /** Las listas (text[]) llegan como texto JSON desde SQLite y como arreglo desde Supabase. */
 export function list(v: unknown): string[] {
   if (Array.isArray(v)) return v as string[];

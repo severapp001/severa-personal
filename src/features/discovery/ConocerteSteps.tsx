@@ -1,11 +1,36 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
-import { GOALS, INTERESTS, NO_WORK, QUESTIONS, STUDY, type Question, type Trade } from '@/core/discovery';
+import {
+  GOALS,
+  INTERESTS,
+  NO_WORK,
+  QUESTIONS,
+  SLEEP_TIMES,
+  STUDY,
+  VARIES,
+  WAKE_TIMES,
+  dayLength,
+  type Question,
+  type Trade,
+} from '@/core/discovery';
+import { EXTRA_HABITS, HabitPicker } from '@/features/habits/HabitPicker';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radius, space } from '@/theme/tokens';
 import { AppText, Button, Chip } from '@/ui';
-import { BriefcaseIcon, HeartIcon, ImagesIcon, ListChecksIcon, PlantIcon, WalletIcon, type Icon } from '@/ui/icons';
+import { tap } from '@/ui/haptics';
+import {
+  BriefcaseIcon,
+  CheckIcon,
+  HeartIcon,
+  ImagesIcon,
+  ListChecksIcon,
+  MoonIcon,
+  PlantIcon,
+  SunIcon,
+  WalletIcon,
+  type Icon,
+} from '@/ui/icons';
 
 // Pasos de Conocerte (F30, E3·18): necesidades → oficios → intereses → camino → plan rápido.
 
@@ -35,7 +60,10 @@ export function GoalsStep({ value, onChange }: { value: string[]; onChange: (v: 
               key={g.code}
               accessibilityRole="checkbox"
               accessibilityState={{ checked: on }}
-              onPress={() => onChange(toggle(value, g.code))}
+              onPress={() => {
+                tap();
+                onChange(toggle(value, g.code));
+              }}
               style={[styles.goal, { backgroundColor: colors.surface, borderColor: on ? colors.accent : 'transparent' }]}
             >
               <View style={[styles.goalIcon, { backgroundColor: on ? colors.accentSoft : colors.surface2 }]}>
@@ -154,7 +182,83 @@ export function PathStep({
   );
 }
 
-export type HabitOption = { code: string; name: string; direction: 'good' | 'reduce' };
+/** Hora de despertar o de dormir: se toca una hora y avanza sola. Abajo se arma el día en vivo. */
+export function DayTimeStep({
+  kind,
+  wake,
+  sleep,
+  onPick,
+}: {
+  kind: 'wake' | 'sleep';
+  wake: string | null;
+  sleep: string | null;
+  onPick: (time: string) => void;
+}) {
+  const { colors } = useTheme();
+  const times = kind === 'wake' ? WAKE_TIMES : SLEEP_TIMES;
+  const value = kind === 'wake' ? wake : sleep;
+  const length = wake && sleep ? dayLength(wake, sleep) : null;
+  const row = (Icon: Icon, label: string, time: string | null, on: boolean) => (
+    <View style={styles.dayRow}>
+      <View style={[styles.dayIcon, { backgroundColor: on ? colors.accent : colors.surface2 }]}>
+        <Icon size={18} color={on ? colors.onAccent : colors.muted} weight={on ? 'fill' : 'regular'} />
+      </View>
+      <AppText variant="label" style={{ flex: 1 }}>
+        {label}
+      </AppText>
+      <AppText variant="label" color={time ? colors.text : colors.muted} style={{ fontVariant: ['tabular-nums'] }}>
+        {time ?? '—'}
+      </AppText>
+    </View>
+  );
+  return (
+    <View style={{ gap: space.md }}>
+      <AppText variant="title">{kind === 'wake' ? '¿A qué hora despiertas?' : '¿Y a qué hora te duermes?'}</AppText>
+      <AppText muted>{kind === 'wake' ? 'Con esto empieza tu día en Severa.' : 'Así Severa sabe cuándo cerrar tu día.'}</AppText>
+      <View style={styles.times}>
+        {times.map((t) => {
+          const on = value === t;
+          return (
+            <Pressable
+              key={t}
+              accessibilityRole="radio"
+              accessibilityState={{ checked: on }}
+              onPress={() => {
+                tap();
+                onPick(t);
+              }}
+              style={({ pressed }) => [styles.time, { backgroundColor: on ? colors.accent : colors.surface, opacity: pressed ? 0.85 : 1 }]}
+            >
+              <AppText variant="label" style={{ fontSize: 16, fontVariant: ['tabular-nums'] }} color={on ? colors.onAccent : colors.text}>
+                {t}
+              </AppText>
+            </Pressable>
+          );
+        })}
+      </View>
+      <Chip
+        label="Varía según el día"
+        selected={value === VARIES}
+        onPress={() => onPick(VARIES)}
+      />
+      <View style={[styles.dayCard, { backgroundColor: colors.surface }]}>
+        <AppText variant="caption" muted style={{ letterSpacing: 1 }}>
+          TU DÍA
+        </AppText>
+        {row(SunIcon, 'Despertar', wake === VARIES ? 'Varía' : wake, kind === 'wake' || !!wake)}
+        <View style={[styles.dayLine, { backgroundColor: colors.line }]} />
+        {row(MoonIcon, 'Dormir', sleep === VARIES ? 'Varía' : sleep, kind === 'sleep')}
+        {length ? (
+          <AppText variant="caption" muted>
+            {`${length.awake} h despierto · ${length.asleep} h de sueño`}
+          </AppText>
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
+export type HabitOption = { code: string; name: string; direction: 'good' | 'reduce'; target?: number; unit?: string | null };
 
 export function QuestionStep({
   code,
@@ -207,27 +311,57 @@ export function QuestionStep({
         </View>
       ) : q.kind === 'habits' ? (
         <View style={{ gap: space.md }}>
-          <AppText muted>Lo que te hace bien y lo que quieres bajar. Sin juicios, solo números.</AppText>
-          <AppText variant="label" color={colors.accent}>
-            LO QUE TE HACE BIEN
-          </AppText>
-          <View style={styles.wrap}>
-            {habits.filter((h) => h.direction === 'good').map((h) => (
-              <Chip key={h.code} label={h.name} selected={chosen.includes(h.code)} onPress={() => setChosen(toggle(chosen, h.code))} />
-            ))}
-          </View>
-          <AppText variant="label" muted>
-            LO QUE QUIERES BAJAR
-          </AppText>
-          <View style={styles.wrap}>
-            {habits.filter((h) => h.direction === 'reduce').map((h) => (
-              <Chip key={h.code} work label={h.name} selected={chosen.includes(h.code)} onPress={() => setChosen(toggle(chosen, h.code))} />
-            ))}
-          </View>
+          <AppText muted>Marca los que quieres contar o escribe uno propio. Sin juicios, solo números.</AppText>
           <Button
             label={chosen.length ? `Contar ${chosen.length} ${chosen.length === 1 ? 'hábito' : 'hábitos'}` : 'Elige al menos uno'}
             disabled={!chosen.length}
-            onPress={() => onAnswer({ habits: chosen })}
+            onPress={() => onAnswer({ habits: chosen.filter((c) => !c.startsWith('own:')), custom: chosen.filter((c) => c.startsWith('own:')).map((c) => c.slice(4)) })}
+          />
+          <HabitPicker
+            suggestions={[...habits, ...EXTRA_HABITS]}
+            chosen={chosen}
+            onToggle={(h) => setChosen(toggle(chosen, h.code))}
+            onCreate={(name) => setChosen([...chosen, `own:${name}`])}
+          />
+          {chosen.filter((c) => c.startsWith('own:')).map((c) => (
+            <AppText key={c} variant="caption" color={colors.accent}>{`✓ ${c.slice(4)} (tuyo)`}</AppText>
+          ))}
+        </View>
+      ) : q.multi ? (
+        <View style={{ gap: space.sm }}>
+          <AppText variant="caption" muted>
+            Puedes marcar más de una.
+          </AppText>
+          {q.options.map((op) => {
+            const on = chosen.includes(op);
+            return (
+              <Pressable
+                key={op}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: on }}
+                onPress={() => {
+                  tap();
+                  setChosen(op === q.only ? (on ? [] : [op]) : toggle(chosen.filter((x) => x !== q.only), op));
+                }}
+                style={({ pressed }) => [
+                  styles.option,
+                  styles.multi,
+                  { backgroundColor: on ? colors.accentSoft : colors.surface, borderColor: on ? colors.accent : 'transparent', opacity: pressed ? 0.85 : 1 },
+                ]}
+              >
+                <AppText variant="label" style={{ fontSize: 16, flex: 1 }} color={on ? colors.accent : colors.text}>
+                  {op}
+                </AppText>
+                <View style={[styles.box, { borderColor: on ? colors.accent : colors.muted, backgroundColor: on ? colors.accent : 'transparent' }]}>
+                  {on ? <CheckIcon size={14} weight="bold" color={colors.onAccent} /> : null}
+                </View>
+              </Pressable>
+            );
+          })}
+          <Button
+            label={chosen.length ? 'Listo' : 'Elige al menos una'}
+            disabled={!chosen.length}
+            onPress={() => onAnswer(chosen.length === 1 && chosen[0] === q.only ? 'skipped' : { options: chosen })}
           />
         </View>
       ) : (
@@ -237,6 +371,7 @@ export function QuestionStep({
               key={op}
               accessibilityRole="button"
               onPress={() => {
+                tap();
                 if (q.kind === 'payday' && op === 'Otro día') return setOtherDay(true);
                 onAnswer(op === 'Después' ? 'skipped' : { option: op });
               }}
@@ -267,6 +402,14 @@ const styles = StyleSheet.create({
   radio: { width: 22, height: 22, borderRadius: 11 },
   tag: { borderRadius: radius.pill, paddingHorizontal: 12, paddingVertical: 6 },
   option: { minHeight: 52, borderRadius: radius.md, paddingHorizontal: 18, justifyContent: 'center' },
+  multi: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 2 },
+  box: { width: 24, height: 24, borderRadius: 7, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
+  times: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  time: { width: '23%', flexGrow: 1, height: 52, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
+  dayCard: { borderRadius: 22, padding: 16, gap: 10 },
+  dayRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  dayIcon: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  dayLine: { width: 2, height: 18, marginLeft: 17, borderRadius: 1 },
   days: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   day: { width: '12.6%', height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
 });

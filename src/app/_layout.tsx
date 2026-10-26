@@ -10,6 +10,7 @@ import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { AuthProvider, useAuth } from '@/data/auth';
 import { PreferencesProvider } from '@/data/preferences';
@@ -67,15 +68,18 @@ function RootNavigator() {
 }
 
 export default function RootLayout() {
+  // GestureHandlerRootView: el cerebro se acerca y se mueve con los dedos (pellizcar y arrastrar).
   return (
-    <ThemeProvider>
-      <AuthProvider>
-        <PowerSyncProvider>
-          <PreferencesProvider>
-            <RootNavigator />
-          </PreferencesProvider>
-        </PowerSyncProvider>
-      </AuthProvider>
-    </ThemeProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <ThemeProvider>
+        <AuthProvider>
+          <PowerSyncProvider>
+            <PreferencesProvider>
+              <RootNavigator />
+            </PreferencesProvider>
+          </PowerSyncProvider>
+        </AuthProvider>
+      </ThemeProvider>
+    </GestureHandlerRootView>
   );
 }

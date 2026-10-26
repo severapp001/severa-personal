@@ -2,9 +2,10 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 
 import { MIN_AGE, ageOn, parseChileanDate, toIsoDate } from '@/core/age';
+import { isValidPassword } from '@/core/password';
 import { useAuth } from '@/data/auth';
 import { authErrorMessage } from '@/features/account/authErrors';
-import { AppText, Button, Checkbox, Notice, Screen, TextField } from '@/ui';
+import { AppText, Button, Checkbox, Notice, PasswordRules, Screen, TextField } from '@/ui';
 
 type Errors = Partial<Record<'name' | 'birth' | 'email' | 'password' | 'terms', string>>;
 
@@ -27,9 +28,7 @@ export default function CrearCuentaScreen() {
     if (!date || date > new Date()) next.birth = 'Escríbela como día-mes-año, por ejemplo 10-05-1990.';
     else if (ageOn(date) < MIN_AGE) next.birth = `Severa es para mayores de ${MIN_AGE} años.`;
     if (!/^\S+@\S+\.\S+$/.test(email.trim())) next.email = 'Revisa el correo.';
-    if (password.length < 8 || !/[A-Za-z]/.test(password) || !/\d/.test(password)) {
-      next.password = 'Al menos 8 caracteres, con letras y números.';
-    }
+    if (!isValidPassword(password)) next.password = 'Al menos 8 caracteres, con letras y números.';
     if (!terms) next.terms = 'Necesitas aceptar para continuar.';
     setErrors(next);
     return { ok: Object.keys(next).length === 0, birthIso: date ? toIsoDate(date) : undefined };
@@ -85,7 +84,7 @@ export default function CrearCuentaScreen() {
         secureTextEntry
         autoComplete="new-password"
         textContentType="newPassword"
-        hint="Al menos 8 caracteres, con letras y números."
+        footer={<PasswordRules password={password} />}
         error={errors.password}
       />
       <Checkbox checked={terms} onChange={setTerms}>
@@ -96,7 +95,8 @@ export default function CrearCuentaScreen() {
       {errors.terms ? <Notice text={errors.terms} /> : null}
 
       <Button label="Crear cuenta" onPress={onSubmit} loading={busy} />
-      <Button label="Ya tengo cuenta" kind="link" onPress={() => router.back()} />
+      {/* Desde la bienvenida se llega con «replace»: no hay pantalla anterior a la cual volver. */}
+      <Button label="Ya tengo cuenta" kind="link" onPress={() => (router.canGoBack() ? router.back() : router.replace('/entrar'))} />
     </Screen>
   );
 }
