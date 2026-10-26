@@ -326,6 +326,12 @@ export function QuestionStep({
           {chosen.filter((c) => c.startsWith('own:')).map((c) => (
             <AppText key={c} variant="caption" color={colors.accent}>{`✓ ${c.slice(4)} (tuyo)`}</AppText>
           ))}
+          {/* Al llegar abajo también se sigue (usuario, 26-10-2026: «solo dice saltar»). */}
+          <Button
+            label={chosen.length ? `Siguiente · contar ${chosen.length}` : 'Siguiente'}
+            disabled={!chosen.length}
+            onPress={() => onAnswer({ habits: chosen.filter((c) => !c.startsWith('own:')), custom: chosen.filter((c) => c.startsWith('own:')).map((c) => c.slice(4)) })}
+          />
         </View>
       ) : q.multi ? (
         <View style={{ gap: space.sm }}>

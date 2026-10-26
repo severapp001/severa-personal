@@ -3,7 +3,14 @@ import { Alert, View } from 'react-native';
 
 import { ageOn } from '@/core/age';
 import { daysUntil } from '@/core/studies';
+import { router } from 'expo-router';
+
+import { useAgenda } from '@/data/agenda';
+import { useEntries } from '@/data/entries';
 import { useFamily, type Person } from '@/data/modules';
+import type { KindDef } from '@/features/modules/catalog';
+import { EntrySheet, type SheetTarget } from '@/features/modules/EntrySheet';
+import { moduleHref } from '@/features/space/moduleRoutes';
 import { authErrorMessage } from '@/features/account/authErrors';
 import { ModuleHeader } from '@/features/space/ModuleHeader';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -12,14 +19,33 @@ import { tap } from '@/ui/haptics';
 import { Chips, DateField, Empty, Field, Kicker, Panel, Row, Sheet } from '@/ui/kit';
 
 // Familia y mascotas (F23): las personas a cargo, con su edad, su próximo cumpleaños y una nota
-// (alergias, colegio, veterinario). Sus gastos, salud y documentos se conectan después.
+// (alergias, colegio, veterinario). Desde el 26-10-2026: pareja, fechas y cuidados de cada uno
+// (aniversario, alimento, vacunas, controles) que pasan al Calendario, y acceso a Gastos compartidos.
 
 const TYPES = [
   { value: 'child', label: 'Hijo o hija' },
+  { value: 'partner', label: 'Pareja' },
   { value: 'pet', label: 'Mascota' },
   { value: 'other', label: 'Otra persona' },
 ] as const;
 type PType = (typeof TYPES)[number]['value'];
+
+// Fechas y cuidados de cada persona o mascota (26-10-2026; usuario: «falta pareja con fecha de
+// aniversario, mascotas con qué alimento, cuándo se compró…»). Las fechas quedan en el Calendario.
+const careKind = (names: string[]): KindDef => ({
+  kind: 'cuidado',
+  label: 'Fechas y cuidados',
+  one: 'Fecha o cuidado',
+  empty: 'Aniversarios, alimento de la mascota, vacunas, controles, colegio.',
+  fields: [
+    { key: 'persona', label: '¿De quién?', kind: 'choice', options: names, required: true },
+    { key: 'tipo', label: 'Qué es', kind: 'choice', required: true, options: ['Aniversario', 'Alimento', 'Vacuna', 'Veterinario o control', 'Colegio', 'Salud', 'Compra', 'Otro'], initial: 'Aniversario' },
+    { key: 'title', label: 'Detalle', kind: 'text', placeholder: 'Marca del alimento, nombre de la vacuna…' },
+    { key: 'day', label: 'Fecha', kind: 'date' },
+    { key: 'amount', label: 'Costo (opcional)', kind: 'amount' },
+    { key: 'body', label: 'Nota (opcional)', kind: 'long' },
+  ],
+});
 
 const todayIso = () => {
   const d = new Date();
@@ -38,7 +64,13 @@ export default function FamiliaScreen() {
   const fam = useFamily();
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<Person | null>(null);
+  const [careSheet, setCareSheet] = useState<SheetTarget | null>(null);
+  const care = useEntries('familia');
+  const agenda = useAgenda(todayIso(), todayIso());
   const today = todayIso();
+  const kind = careKind(fam.people.map((p) => p.name));
+  const cares = care.of('cuidado');
+  const fmt = (d: string) => `${d.slice(8, 10)}-${d.slice(5, 7)}-${d.slice(0, 4)}`;
 
   const describe = (p: Person) => {
     const parts: string[] = [];
@@ -53,7 +85,7 @@ export default function FamiliaScreen() {
     return parts.join(' · ') || 'Toca para agregar una nota';
   };
 
-  const groups = TYPES.map((t) => ({ ...t, list: fam.people.filter((p) => p.type === t.value) })).filter((g) => g.list.length);
+  const groups = TYPES.filter((t) => t.value !== 'partner').map((t) => ({ ...t, list: fam.people.filter((p) => p.type === t.value) })).filter((g) => g.list.length);
   const soon = fam.people.filter((p) => p.birth_date && nextBirthday(p.birth_date, today) <= 30);
 
   return (
@@ -71,7 +103,7 @@ export default function FamiliaScreen() {
       {groups.length ? (
         groups.map((g) => (
           <Panel key={g.value}>
-            <Kicker>{g.value === 'child' ? 'Hijos' : g.value === 'pet' ? 'Mascotas' : 'Otras personas a cargo'}</Kicker>
+            <Kicker>{g.value === 'child' ? 'Hijos' : g.value === 'pet' ? 'Mascotas' : 'Pareja y otras personas'}</Kicker>
             {g.list.map((p) => (
               <Row
                 key={p.id}
@@ -91,7 +123,45 @@ export default function FamiliaScreen() {
       ) : (
         <Empty text="Agrega a quienes cuidas: hijos, mascotas, tus papás. Severa te recuerda sus cumpleaños y guarda lo importante de cada uno." />
       )}
-      <AddPerson visible={adding} onClose={() => setAdding(false)} onSave={fam.addPerson} />
+      {fam.people.length ? (
+        <Panel>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Kicker>Fechas y cuidados</Kicker>
+            <AppText variant="label" color={colors.accent} onPress={() => setCareSheet({ kind })}>
+              + Agregar
+            </AppText>
+          </View>
+          {cares.length ? (
+            cares.map((c) => (
+              <Row
+                key={c.id}
+                title={`${String(c.data.persona)} · ${String(c.data.tipo)}${c.title ? `: ${c.title}` : ''}`}
+                sub={[c.day ? fmt(c.day) : null, c.amount ? `$${Number(c.amount).toLocaleString('es-CL')}` : null, c.body].filter(Boolean).join(' · ') || undefined}
+                onPress={() => setCareSheet({ kind, entry: c })}
+              />
+            ))
+          ) : (
+            <Empty text={kind.empty} />
+          )}
+        </Panel>
+      ) : null}
+      <Button label="Gastos compartidos con tu familia o pareja" kind="secondary" onPress={() => router.push(moduleHref('gastos_compartidos'))} />
+      <AddPerson visible={adding} onClose={() => setAdding(false)} onSave={(v) => fam.addPerson(v.type === 'partner' ? { ...v, type: 'other', relationship: 'Pareja' } : { ...v, type: v.type })} />
+      <EntrySheet
+        target={careSheet}
+        ctx={{ parent: null, entries: care.entries }}
+        onClose={() => setCareSheet(null)}
+        onSave={async (input, target) => {
+          if (target.entry) return care.update(target.entry.id, input);
+          await care.add(input);
+          // Aniversarios y controles quedan en el Calendario (el aniversario, cada año).
+          const tipo = String(input.data?.tipo ?? '');
+          if (input.day && ['Aniversario', 'Vacuna', 'Veterinario o control', 'Colegio', 'Salud'].includes(tipo)) {
+            await agenda.addEvent({ title: `${tipo} · ${String(input.data?.persona ?? '')}${input.title ? `: ${input.title}` : ''}`.slice(0, 120), event_date: input.day, starts_at: null, ends_at: null, layer: 'familia', repeat: tipo === 'Aniversario' ? 'yearly' : 'none', remind_minutes: null, location: null, notes: null, importance: tipo === 'Aniversario' ? 1 : 0, repeat_until: null });
+          }
+        }}
+        onRemove={(e) => care.remove(e.id)}
+      />
       <EditNotes person={editing} onClose={() => setEditing(null)} onSave={(notes) => (editing ? fam.updatePerson(editing.id, { notes }) : undefined)} />
     </Screen>
   );
@@ -118,7 +188,7 @@ function AddPerson({
       <Field label="Nombre" value={name} onChangeText={setName} />
       <DateField label="Fecha de nacimiento (opcional)" value={birth} onChange={setBirth} />
       <Field
-        label={type === 'pet' ? 'Especie (perro, gato…)' : type === 'other' ? 'Relación (mamá, abuelo…)' : 'Nota (opcional)'}
+        label={type === 'pet' ? 'Especie (perro, gato…)' : type === 'other' ? 'Relación (mamá, abuelo…)' : type === 'partner' ? 'Nota (opcional; el aniversario va en «Fechas y cuidados»)' : 'Nota (opcional)'}
         value={extra}
         onChangeText={setExtra}
       />
@@ -136,8 +206,8 @@ function AddPerson({
               name: name.trim(),
               birth_date: birth,
               species: type === 'pet' ? extra.trim() || null : null,
-              relationship: type === 'other' ? extra.trim() || null : type === 'child' ? 'hijo o hija' : null,
-              notes: type === 'child' ? extra.trim() || null : null,
+              relationship: type === 'other' ? extra.trim() || null : type === 'child' ? 'hijo o hija' : type === 'partner' ? 'Pareja' : null,
+              notes: type === 'child' || type === 'partner' ? extra.trim() || null : null,
             });
             tap();
             setName('');

@@ -1,9 +1,11 @@
+import { useLocalSearchParams } from 'expo-router';
 import { useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
 import { continueFrom, nextChapter, parseReference, previousChapter, progress, type BibleBook } from '@/core/bible';
 import { dayKey } from '@/core/today';
 import { searchBible, useBibleBooks, useBibleNotes, useChapter, type SearchHit } from '@/data/bible';
+import { useEntries } from '@/data/entries';
 import { ModuleHeader } from '@/features/space/ModuleHeader';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fonts, radius, space } from '@/theme/tokens';
@@ -22,8 +24,10 @@ export default function BibliaScreen() {
   const { colors } = useTheme();
   const books = useBibleBooks();
   const notes = useBibleNotes();
+  // Desde el Pan de vida se llega con ?libro=PSA&cap=23&v=1 y se abre ese versículo (26-10-2026).
+  const params = useLocalSearchParams<{ libro?: string; cap?: string; v?: string }>();
   const [tab, setTab] = useState<Tab>('leer');
-  const [place, setPlace] = useState<Place | null>(null);
+  const [place, setPlace] = useState<Place | null>(params.libro && params.cap ? { book: params.libro, chapter: Number(params.cap), verse: params.v ? Number(params.v) : null } : null);
   const current: Place = place ?? continueFrom(books, notes.reads);
   const open = (p: Place) => {
     setPlace(p);
@@ -111,6 +115,7 @@ function Reader({ books, notes, place, onGo }: { books: BibleBook[]; notes: Retu
         />
       </View>
       {refError ? <Notice text={refError} tone="mid" /> : null}
+      {place.verse && verses.length ? <VerseFocus books={books} notes={notes} book={book} place={place} verses={verses} onGo={onGo} /> : null}
 
       <ScrollView ref={scroll} style={{ flex: 1 }} contentContainerStyle={{ gap: 6, paddingBottom: space.xl }}>
         {loading ? <AppText muted>Cargando…</AppText> : null}
@@ -223,6 +228,69 @@ function Reader({ books, notes, place, onGo }: { books: BibleBook[]; notes: Retu
       </Sheet>
       <VerseSheet key={selected ?? 0} notes={notes} book={book} chapter={place.chapter} verse={selected} body={verses.find((v) => v.verse === selected)?.body ?? ''} onClose={() => setSelected(null)} />
     </>
+  );
+}
+
+/** Un versículo a la vez (usuario, 26-10-2026: «mostrar el versículo que salió en el pan de vida y
+ *  moverse al siguiente o al anterior»), con favorito y «leído hoy», que cuenta para la racha. */
+function VerseFocus({ books, notes, book, place, verses, onGo }: { books: BibleBook[]; notes: ReturnType<typeof useBibleNotes>; book: BibleBook; place: Place; verses: { verse: number; body: string }[]; onGo: (p: Place) => void }) {
+  const { colors } = useTheme();
+  const log = useEntries('biblia');
+  const today = dayKey(new Date());
+  const v = verses.find((x) => x.verse === place.verse) ?? verses[0];
+  const fav = !!notes.markOf(book.code, place.chapter, v.verse, 'favorite');
+  const readToday = log.of('lectura').find((e) => e.day === today && e.title === `${book.code} ${place.chapter}:${v.verse}`);
+  const last = verses.at(-1)?.verse ?? 1;
+  const go = (delta: 1 | -1) => {
+    tap();
+    if (delta > 0 && v.verse < last) return onGo({ ...place, verse: v.verse + 1 });
+    if (delta < 0 && v.verse > 1) return onGo({ ...place, verse: v.verse - 1 });
+    const other = delta > 0 ? nextChapter(books, book.code, place.chapter) : previousChapter(books, book.code, place.chapter);
+    if (other) onGo({ ...other, verse: 1 });
+  };
+  return (
+    <View style={[styles.focus, { backgroundColor: colors.surface }]}>
+      <Kicker color={colors.accent}>{`${book.name} ${place.chapter}:${v.verse}`}</Kicker>
+      <AppText style={{ fontSize: 21, lineHeight: 30, fontFamily: fonts.semibold }}>{`«${v.body}»`}</AppText>
+      <View style={{ flexDirection: 'row', gap: 8 }}>
+        <View style={{ flex: 1 }}>
+          <NavButton label="Anterior" back onPress={() => go(-1)} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <NavButton label="Siguiente" onPress={() => go(1)} />
+        </View>
+      </View>
+      <View style={{ flexDirection: 'row', gap: 8 }}>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => {
+            tap();
+            notes.toggleFavorite(book.code, place.chapter, v.verse);
+          }}
+          style={[styles.fav, { flex: 1, backgroundColor: fav ? colors.accentSoft : colors.surface2 }]}
+        >
+          <HeartIcon size={18} weight={fav ? 'fill' : 'regular'} color={colors.accent} />
+          <AppText variant="label">{fav ? 'Favorito' : 'Favorito'}</AppText>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => {
+            tap();
+            if (readToday) log.remove(readToday.id);
+            else log.add({ kind: 'lectura', day: today, title: `${book.code} ${place.chapter}:${v.verse}` });
+          }}
+          style={[styles.fav, { flex: 1, backgroundColor: readToday ? colors.okSoft : colors.surface2 }]}
+        >
+          <CheckIcon size={18} color={readToday ? colors.ok : colors.muted} />
+          <AppText variant="label" color={readToday ? colors.ok : colors.text}>
+            {readToday ? 'Leído hoy' : 'Marcar leído'}
+          </AppText>
+        </Pressable>
+      </View>
+      <AppText variant="caption" color={colors.accent} onPress={() => onGo({ book: book.code, chapter: place.chapter })}>
+        Ver el capítulo completo
+      </AppText>
+    </View>
   );
 }
 
@@ -373,6 +441,7 @@ function MyNotes({ books, notes, onOpen }: { books: BibleBook[]; notes: ReturnTy
 }
 
 const styles = StyleSheet.create({
+  focus: { borderRadius: 20, padding: space.lg, gap: space.md },
   bar: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   pick: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 12, paddingVertical: 9, paddingHorizontal: 12 },
   input: { flexDirection: 'row', alignItems: 'center', borderRadius: radius.md, paddingHorizontal: 12 },

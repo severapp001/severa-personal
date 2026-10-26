@@ -17,6 +17,8 @@ export type CalendarEvent = {
   remind_minutes: number | null;
   location: string | null;
   notes: string | null;
+  importance?: number | null;
+  repeat_until?: string | null;
 };
 export type TaskStatus = 'pending' | 'done' | 'skipped' | 'dismissed';
 export type Task = {
@@ -72,9 +74,10 @@ export const weekday = (day: string) => parse(day).getDay();
 export const hhmm = (t: string | null | undefined) => (t && /^\d{2}:\d{2}/.test(t) ? t.slice(0, 5) : null);
 
 /** ¿El evento ocurre ese día? Un evento que se repite parte en su fecha y sigue para siempre. */
-export function occursOn(e: Pick<CalendarEvent, 'event_date' | 'repeat'>, day: string): boolean {
+export function occursOn(e: Pick<CalendarEvent, 'event_date' | 'repeat'> & { repeat_until?: string | null }, day: string): boolean {
   if (day === e.event_date) return true;
   if (e.repeat === 'none' || day < e.event_date) return false;
+  if (e.repeat_until && day > String(e.repeat_until).slice(0, 10)) return false;
   if (e.repeat === 'weekly') return weekday(day) === weekday(e.event_date);
   if (e.repeat === 'monthly') return day.slice(8) === e.event_date.slice(8);
   return day.slice(5) === e.event_date.slice(5);
@@ -215,7 +218,8 @@ export function dailyPriorities(input: PriorityInput): PriorityItem[] {
   for (const e of eventsOn(input.events, day)) {
     const state = stateOf(input.states, day, 'event', e.id);
     if (state === 'dismissed') continue;
-    items.push({ ...base, key: `event:${e.id}`, origin: 'event', originId: e.id, title: e.title, sub: `${eventTime(e)}${e.location ? ` · ${e.location}` : ''}`, time: hhmm(e.starts_at), done: state === 'done' });
+    const imp = Number((e as { importance?: number | null }).importance) || 0;
+    items.push({ ...base, urgent: imp > 0, key: `event:${e.id}`, origin: 'event', originId: e.id, title: `${imp === 2 ? '‼ ' : imp === 1 ? '★ ' : ''}${e.title}`, sub: `${eventTime(e)}${e.location ? ` · ${e.location}` : ''}`, time: hhmm(e.starts_at), done: state === 'done' });
   }
 
   const tomorrow = addDays(day, 1);
@@ -257,6 +261,7 @@ export function dailyPriorities(input: PriorityInput): PriorityItem[] {
     });
   }
 
-  const rank = (i: PriorityItem) => (i.done ? 3 : i.overdue ? 0 : i.time ? 1 : 2);
+  // Lo urgente o marcado como prioridad del día va primero (26-10-2026).
+  const rank = (i: PriorityItem) => (i.done ? 4 : i.overdue ? 0 : i.urgent ? 1 : i.time ? 2 : 3);
   return items.sort((a, b) => rank(a) - rank(b) || (a.time ?? '').localeCompare(b.time ?? '') || Number(b.urgent) - Number(a.urgent));
 }

@@ -5,6 +5,7 @@ import { Alert, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { addDays, longDay, shortDay } from '@/core/agenda';
 import { activitiesOf, activityInsights, dayEntry, journalStreak, moodDistribution, moodOf, MOODS, SUGGESTED_ACTIVITIES, type Mood } from '@/core/journal';
 import { dayKey } from '@/core/today';
+import { useEntries } from '@/data/entries';
 import { useJournal, type Journal } from '@/data/journal';
 import { useMoodColor } from '@/features/journal/useMoodColor';
 import { ModuleHeader } from '@/features/space/ModuleHeader';
@@ -13,7 +14,7 @@ import { fonts, radius } from '@/theme/tokens';
 import { AppText, Button, Screen } from '@/ui';
 import { tap } from '@/ui/haptics';
 import { PlusIcon } from '@/ui/icons';
-import { BarRow, DateField, Empty, Field, Kicker, Panel, Segmented } from '@/ui/kit';
+import { BarRow, DateField, Empty, Kicker, Panel, Segmented } from '@/ui/kit';
 
 // Diario y Gratitud (MD6, frente P3, 25-10-2026), con la primera versión como referencia:
 // - el día: ánimo por colores, actividades, lo que pasó y lo que agradeces;
@@ -44,8 +45,7 @@ export default function DiarioScreen() {
       {tab === 'dia' ? (
         <>
           <DateField label="Día" value={day} onChange={(d) => d && d <= today && setDay(d)} />
-          {/* El formulario nace con la entrada del día elegido. */}
-          <DayForm key={`${day}:${dayEntry(j.days, day)?.id ?? 'nuevo'}`} j={j} day={day} />
+          <DayForm key={day} j={j} day={day} />
           <GratitudeBox j={j} day={day} />
         </>
       ) : tab === 'gratitud' ? (
@@ -57,34 +57,49 @@ export default function DiarioScreen() {
   );
 }
 
+// Desde el 26-10-2026 (usuario: «apreto guardar y no pasa nada»): el ánimo y las actividades se
+// guardan al tocarlos, y «¿Qué pasó?» es una lista de momentos que se guardan uno por uno, así se
+// anota más de una situación del día. Cerrar el día no bloquea nada: se puede seguir agregando.
 function DayForm({ j, day }: { j: Journal; day: string }) {
   const { colors } = useTheme();
   const color = useMoodColor();
+  const moments = useEntries('diario');
   const entry = dayEntry(j.days, day);
-  const [mood, setMood] = useState<number | null>(entry?.mood ?? null);
-  const [acts, setActs] = useState<string[]>(activitiesOf(entry?.activities));
-  const [body, setBody] = useState(entry?.body ?? '');
   const [other, setOther] = useState('');
-  const [saved, setSaved] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const [draft, setDraft] = useState('');
+  const [note, setNote] = useState<string | null>(null);
+  const mood = entry?.mood ?? null;
+  const acts = activitiesOf(entry?.activities);
+  const list = moments.of('momento').filter((m) => m.day === day).sort((a, b) => String(a.data.hora ?? '').localeCompare(String(b.data.hora ?? '')));
 
   // Las sugeridas más las propias que ya usaste.
   const used = new Set(j.days.flatMap((d) => activitiesOf(d.activities)));
   const options = [...new Set([...SUGGESTED_ACTIVITIES, ...used, ...acts])];
-  const toggle = (a: string) => {
-    tap();
-    setSaved(false);
-    setActs((list) => (list.includes(a) ? list.filter((x) => x !== a) : [...list, a]));
-  };
 
-  async function save(closed?: boolean) {
-    setBusy(true);
+  async function patch(p: Parameters<Journal['saveDay']>[1], message = 'Guardado') {
     try {
-      await j.saveDay(day, { mood, activities: acts, body, ...(closed === undefined ? {} : { closed }) });
+      await j.saveDay(day, p);
       tap();
-      setSaved(true);
-    } finally {
-      setBusy(false);
+      setNote(message);
+    } catch (e) {
+      setNote(e instanceof Error ? e.message : 'No se pudo guardar.');
+    }
+  }
+  const toggle = (a: string) => patch({ activities: acts.includes(a) ? acts.filter((x) => x !== a) : [...acts, a] });
+
+  async function addMoment() {
+    const text = draft.trim();
+    if (!text) return;
+    const now = new Date();
+    const hora = day === dayKey(now) ? `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}` : null;
+    setDraft('');
+    try {
+      await moments.add({ kind: 'momento', day, body: text, data: { hora } });
+      tap();
+      setNote('Momento guardado');
+    } catch (e) {
+      setDraft(text);
+      setNote(e instanceof Error ? e.message : 'No se pudo guardar.');
     }
   }
 
@@ -99,11 +114,7 @@ function DayForm({ j, day }: { j: Journal; day: string }) {
               key={m.value}
               accessibilityRole="radio"
               accessibilityState={{ checked: on }}
-              onPress={() => {
-                tap();
-                setSaved(false);
-                setMood(on ? null : m.value);
-              }}
+              onPress={() => patch({ mood: on ? null : m.value })}
               style={[styles.mood, { backgroundColor: on ? color(m.value) : colors.surface2 }]}
             >
               <View style={[styles.dot, { backgroundColor: on ? colors.onAccent : color(m.value) }]} />
@@ -143,24 +154,62 @@ function DayForm({ j, day }: { j: Journal; day: string }) {
           style={{ flex: 1, color: colors.text, fontFamily: fonts.medium, fontSize: 15, paddingVertical: 10 }}
         />
       </View>
-      <Field
-        label="Lo que pasó (solo para ti)"
-        value={body}
-        onChangeText={(t) => {
-          setSaved(false);
-          setBody(t);
-        }}
-        multiline
-        placeholder="Escribe con calma…"
-      />
-      <View style={{ flexDirection: 'row', gap: 8 }}>
-        <View style={{ flex: 1 }}>
-          <Button label={saved ? 'Guardado' : 'Guardar'} loading={busy} onPress={() => save()} />
+
+      <Kicker>¿Qué pasó? (solo para ti)</Kicker>
+      {entry?.body ? (
+        <View style={[styles.moment, { borderLeftColor: colors.line }]}>
+          <AppText variant="caption" muted>
+            Nota del día
+          </AppText>
+          <AppText style={{ fontSize: 15 }}>{entry.body}</AppText>
         </View>
-        <View style={{ flex: 1 }}>
-          <Button label={entry?.closed ? 'Día cerrado' : 'Cerrar el día'} kind="secondary" disabled={busy} onPress={() => save(!entry?.closed)} />
-        </View>
+      ) : null}
+      {list.map((m) => (
+        <Pressable
+          key={m.id}
+          onLongPress={() =>
+            Alert.alert('¿Borrar este momento?', m.body ?? '', [
+              { text: 'Cancelar', style: 'cancel' },
+              { text: 'Borrar', style: 'destructive', onPress: () => moments.remove(m.id) },
+            ])
+          }
+          style={[styles.moment, { borderLeftColor: colors.accent }]}
+        >
+          {m.data.hora ? (
+            <AppText variant="caption" muted>
+              {String(m.data.hora)}
+            </AppText>
+          ) : null}
+          <AppText style={{ fontSize: 15 }}>{m.body}</AppText>
+        </Pressable>
+      ))}
+      <View style={[styles.input, { backgroundColor: colors.surface2, alignItems: 'flex-end' }]}>
+        <TextInput
+          value={draft}
+          onChangeText={setDraft}
+          placeholder={list.length || entry?.body ? 'Otra cosa que pasó…' : 'Escribe una situación del día…'}
+          placeholderTextColor={colors.muted}
+          multiline
+          style={{ flex: 1, color: colors.text, fontFamily: fonts.medium, fontSize: 15, paddingVertical: 10, maxHeight: 140 }}
+        />
+        <Pressable accessibilityRole="button" accessibilityLabel="Agregar momento" onPress={addMoment} hitSlop={8} style={[styles.send, { backgroundColor: draft.trim() ? colors.accent : colors.surface }]}>
+          <PlusIcon size={18} color={draft.trim() ? colors.onAccent : colors.muted} />
+        </Pressable>
       </View>
+      {note ? (
+        <AppText variant="caption" color={colors.ok} accessibilityLiveRegion="polite">
+          {`✓ ${note}`}
+        </AppText>
+      ) : (
+        <AppText variant="caption" muted>
+          Todo se guarda al tocarlo. Mantén presionado un momento para borrarlo.
+        </AppText>
+      )}
+      <Button
+        label={entry?.closed ? 'Día cerrado ✓ · reabrir' : 'Cerrar el día'}
+        kind={entry?.closed ? 'secondary' : 'primary'}
+        onPress={() => patch({ closed: !entry?.closed }, entry?.closed ? 'Día reabierto' : 'Día cerrado. Puedes seguir agregando.')}
+      />
     </Panel>
   );
 }
@@ -206,6 +255,9 @@ function GratitudeList({ j, today }: { j: Journal; today: string }) {
   const days = [...new Set(j.gratitude.map((g) => g.day))];
   return (
     <>
+      <AppText variant="caption" muted>
+        Gratitud es parte de tu Diario: cada día, una o más cosas buenas. Aquí ves todas juntas.
+      </AppText>
       <GratitudeBox j={j} day={today} />
       {days.length ? (
         days
@@ -326,6 +378,8 @@ const styles = StyleSheet.create({
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   chip: { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 7 },
   input: { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: radius.md, paddingHorizontal: 12 },
+  moment: { borderLeftWidth: 3, paddingLeft: 10, gap: 2 },
+  send: { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
   strip: { flexDirection: 'row', gap: 4 },
   square: { flex: 1, height: 22, borderRadius: 5 },
 });

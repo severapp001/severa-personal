@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { LAYERS, parseTime, REMINDERS, REPEATS } from '@/core/agenda';
-import { describeProposal, type Proposal, type Refs, type ResultStatus } from '@/core/assistant';
+import { describeProposal, WEEKDAY_NAMES, type Proposal, type Refs, type ResultStatus } from '@/core/assistant';
 import { MOODS } from '@/core/journal';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radius, space } from '@/theme/tokens';
@@ -201,6 +201,33 @@ function Editor({ draft, refs, onChange }: { draft: Proposal; refs: Refs; onChan
             value={draft.remind === null ? 'none' : String(draft.remind)}
             onChange={(v) => onChange({ ...draft, remind: v === 'none' ? null : Number(v) })}
           />
+        </View>
+      );
+    case 'crear_ramo':
+      return (
+        <View style={{ gap: space.md }}>
+          <Field label="Ramo" value={draft.name} onChangeText={(name) => onChange({ ...draft, name })} />
+          <Chips options={WEEKDAY_NAMES.map((w, i) => ({ value: String(i + 1), label: w.slice(0, 3) }))} value={draft.weekday ? String(draft.weekday) : null} onChange={(v) => onChange({ ...draft, weekday: Number(v) })} />
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <View style={{ flex: 1 }}>
+              <TimeInput label="Empieza" value={draft.start} onChange={(start) => onChange({ ...draft, start })} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <TimeInput label="Termina" value={draft.end} onChange={(end) => onChange({ ...draft, end: draft.start && end && end > draft.start ? end : null })} />
+            </View>
+          </View>
+          <DateField label="Hasta cuándo (fin del semestre o trimestre)" value={draft.until} onChange={(until) => onChange({ ...draft, until })} future />
+          <Field label="Profesor o profesora" value={draft.teacher ?? ''} onChangeText={(teacher) => onChange({ ...draft, teacher: teacher || null })} />
+          <Segmented
+            options={[
+              { value: 'na', label: 'Sin trabajos' },
+              { value: 'grupo', label: 'En grupo' },
+              { value: 'solo', label: 'Individual' },
+            ]}
+            value={draft.group === null ? 'na' : draft.group ? 'grupo' : 'solo'}
+            onChange={(v) => onChange({ ...draft, group: v === 'na' ? null : v === 'grupo' })}
+          />
+          <Field label="Pruebas o trabajos (opcional)" value={draft.evaluations ?? ''} onChangeText={(evaluations) => onChange({ ...draft, evaluations: evaluations || null })} placeholder="Solemne 1 el 20-11, 30 %" />
         </View>
       );
     case 'crear_tarea':

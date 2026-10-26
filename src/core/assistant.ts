@@ -228,7 +228,11 @@ export type EventProposal = {
 export type TaskProposal = { tool: 'crear_tarea'; title: string; date: string | null; time: string | null; urgent: boolean };
 export type JournalProposal = { tool: 'escribir_diario'; date: string; mood: number | null; text: string | null; activities: string[] };
 export type GratitudeProposal = { tool: 'agradecer'; date: string; text: string };
-export type Proposal = MovementProposal | HabitLogProposal | NewHabitProposal | RuleProposal | EventProposal | TaskProposal | JournalProposal | GratitudeProposal;
+/** Un ramo con su clase semanal (26-10-2026): «tengo Ingeniería económica los jueves a las 10:00». */
+export type CourseProposal = { tool: 'crear_ramo'; name: string; weekday: number | null; start: string | null; end: string | null; until: string | null; teacher: string | null; group: boolean | null; evaluations: string | null };
+export type Proposal = MovementProposal | HabitLogProposal | NewHabitProposal | RuleProposal | EventProposal | TaskProposal | JournalProposal | GratitudeProposal | CourseProposal;
+
+export const WEEKDAY_NAMES = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'];
 
 const MOOD_LABEL = ['', 'Difícil', 'Regular', 'Bien', 'Muy bien'];
 
@@ -295,6 +299,24 @@ export function readProposal(name: string, raw: unknown, refs: Refs, today: stri
         repeat: REPEAT_BY_WORD[String(input.repetir)] ?? 'none',
         remind,
         place: str(input.lugar)?.slice(0, 120) ?? null,
+      };
+    }
+    case 'crear_ramo': {
+      const courseName = str(input.nombre)?.slice(0, 80);
+      if (!courseName) return null;
+      const wd = int(input.dia_semana);
+      const start = time(input.hora_inicio);
+      const end = start ? time(input.hora_fin) : null;
+      return {
+        tool: name,
+        name: courseName,
+        weekday: wd >= 1 && wd <= 7 ? wd : null,
+        start,
+        end: end && start && end > start ? end : null,
+        until: typeof input.hasta === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(input.hasta) ? input.hasta : null,
+        teacher: str(input.profesor)?.slice(0, 80) ?? null,
+        group: typeof input.en_grupo === 'boolean' ? input.en_grupo : null,
+        evaluations: str(input.evaluaciones)?.slice(0, 200) ?? null,
       };
     }
     case 'crear_tarea': {
@@ -367,6 +389,19 @@ export function describeProposal(p: Proposal, refs: Refs, today: string): { titl
       };
     case 'agradecer':
       return { title: 'Agradezco', detail: `«${p.text}» · ${dayLabel(p.date, today)}` };
+    case 'crear_ramo':
+      return {
+        title: `Ramo: ${p.name}`,
+        detail: [
+          p.weekday ? `${WEEKDAY_NAMES[p.weekday - 1]}${p.start ? ` ${hours(p.start, p.end)}` : ''}` : 'sin horario',
+          p.until ? `hasta el ${p.until.slice(8, 10)}-${p.until.slice(5, 7)}` : null,
+          p.teacher ? `prof. ${p.teacher}` : null,
+          p.group === null ? null : p.group ? 'en grupo' : 'individual',
+          p.evaluations,
+        ]
+          .filter(Boolean)
+          .join(' · '),
+      };
   }
 }
 
@@ -397,6 +432,8 @@ export function proposalLine(p: Proposal, refs: Refs): string {
       return `diario del ${p.date}${p.mood ? `, ánimo ${MOOD_LABEL[p.mood].toLowerCase()}` : ''}${p.activities.length ? `, actividades: ${p.activities.join(', ')}` : ''}${p.text ? ', con texto' : ''}`;
     case 'agradecer':
       return `gratitud del ${p.date}: «${p.text}»`;
+    case 'crear_ramo':
+      return `ramo «${p.name}»${p.weekday ? ` los ${WEEKDAY_NAMES[p.weekday - 1]}${p.start ? ` ${hours(p.start, p.end)}` : ''}` : ''}${p.until ? ` hasta el ${p.until}` : ''}`;
   }
 }
 

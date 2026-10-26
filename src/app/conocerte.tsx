@@ -3,9 +3,11 @@ import { Pressable, View } from 'react-native';
 import Animated, { FadeInLeft, FadeInRight } from 'react-native-reanimated';
 
 import { ageOn } from '@/core/age';
+import { dayKey } from '@/core/today';
 import { initialStates, pickQuestions, planModules, works, type Path } from '@/core/discovery';
 import { useAuth } from '@/data/auth';
 import { saveOnboarding, useHabitTemplates, useNeurons, useTrades } from '@/data/discovery';
+import { habitKey, useHabits } from '@/data/modules';
 import { insertRecord, usePersonalSpace } from '@/data/records';
 import { EXTRA_HABITS } from '@/features/habits/HabitPicker';
 import { authErrorMessage } from '@/features/account/authErrors';
@@ -55,6 +57,8 @@ export default function ConocerteScreen() {
   const { ask: questions, later } = pickQuestions(planMods);
   const habits = habitTemplates.filter((h) => age === null || age >= h.min_age);
   const personalSpace = usePersonalSpace();
+  // Al repetir Conocerte no se vuelven a crear los hábitos que ya cuentas (26-10-2026).
+  const currentHabits = useHabits(dayKey(new Date())).habits;
 
   function go(next: number) {
     tap();
@@ -95,14 +99,17 @@ export default function ConocerteScreen() {
     const a = answer as { habits?: string[]; custom?: string[] } | undefined;
     if (!personalSpace || !a) return;
     const all = [...habits, ...EXTRA_HABITS];
+    const have = new Set(currentHabits.map(habitKey));
     try {
       for (const code of a.habits ?? []) {
         const h = all.find((x) => x.code === code);
-        if (!h) continue;
+        if (!h || have.has(habitKey({ template_code: h.code, name: h.name }))) continue;
+        have.add(habitKey({ template_code: h.code, name: h.name }));
         const target = 'target' in h && h.target && h.target > 1 && h.target <= 20 ? h.target : 1;
         await insertRecord('habits', personalSpace, session?.user.id, { name: h.name, direction: h.direction, template_code: h.code, daily_target: target, unit: ('unit' in h && h.unit) || null, active: true, sort_order: 0 });
       }
       for (const name of a.custom ?? []) {
+        if (have.has(habitKey({ template_code: null, name }))) continue;
         await insertRecord('habits', personalSpace, session?.user.id, { name, direction: 'good', template_code: null, daily_target: 1, unit: null, active: true, sort_order: 0 });
       }
     } catch {

@@ -279,6 +279,63 @@ const MONEY_VERBS = /\b(gaste|gasto|compre|pague|eche|me costo|costo|salio|invit
 const INCOME_VERBS = /\b(me pagaron|me pago|cobre|gane|ingreso|me llego|recibi|vendi|me depositaron|me transfirieron|sueldo)\b/;
 const MONEY_DROP = ['gaste', 'gasto', 'compre', 'pague', 'eche', 'costo', 'salio', 'pagaron', 'pago', 'cobre', 'gane', 'llego', 'recibi', 'depositaron', 'transfirieron', 'pesos', 'plata', 'debito', 'credito', 'tarjeta', 'efectivo'];
 
+const COURSE_DAY = /\b(lunes|martes|miercoles|jueves|viernes|sabado|domingo)s?\b/;
+const COURSE_DAYS = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'];
+const MONTH_WORDS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+const hm = (h: string, m?: string) => {
+  const hh = Number(h);
+  const mm = Number(m ?? 0);
+  return hh < 24 && mm < 60 ? `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}` : null;
+};
+
+/** Nombre, día, horas, hasta cuándo, profesor y si es en grupo de un ramo dicho con palabras. */
+export function parseCourse(clause: string, t: string, today: string): Record<string, unknown> | null {
+  const nameMatch =
+    /(?:llamad[oa]|que se llama|de nombre)\s+(.+?)(?=\s+(?:todos|cada|los|el|la|a las|desde|de \d|hasta|con|,|\(|$))/i.exec(clause) ??
+    /(?:ramo|asignatura|c[aá]tedra|materia|curso|clases? de)\s+(?:de\s+)?(.+?)(?=\s+(?:todos|cada|los|el|la|a las|desde|de \d|hasta|con|,|\(|$))/i.exec(clause);
+  const name = nameMatch?.[1]?.replace(/^(?:llamad[oa]|de)\s+/i, '').trim();
+  if (!name || name.length < 2) return null;
+  const day = COURSE_DAY.exec(t);
+  const range = /\b(?:de|desde|a las)\s+(\d{1,2})(?::(\d{2}))?\s*(?:hrs?|horas)?\s*(?:a|hasta las?|-)\s*(?:las\s+)?(\d{1,2})(?::(\d{2}))?/.exec(t);
+  const single = /\ba las\s+(\d{1,2})(?::(\d{2}))?/.exec(t);
+  const start = range ? hm(range[1], range[2]) : single ? hm(single[1], single[2]) : null;
+  const end = range ? hm(range[3], range[4]) : null;
+  const month = new RegExp(`\\b(?:hasta|en|termina(?:\\s+en)?)\\b[^.]*?\\b(${MONTH_WORDS.join('|')})\\b`).exec(t);
+  let until: string | null = null;
+  if (month) {
+    const m = MONTH_WORDS.indexOf(month[1]);
+    const y = Number(today.slice(0, 4)) + (m + 1 < Number(today.slice(5, 7)) ? 1 : 0);
+    until = `${y}-${String(m + 1).padStart(2, '0')}-${String(new Date(y, m + 1, 0).getDate()).padStart(2, '0')}`;
+  }
+  const teacher = /\bprofe(?:sor|sora)?\s+([A-ZÁÉÍÓÚÑ][\wáéíóúñ.]+(?:\s+[A-ZÁÉÍÓÚÑ][\wáéíóúñ]+)?)/.exec(clause)?.[1] ?? null;
+  const group = /\ben grupo\b|\bgrupal\b/.test(t) ? true : /\bindividual\b/.test(t) ? false : null;
+  const evals = /\b(pruebas?|examen(?:es)?|controles?|trabajos?|evaluaciones?|solemnes?)\b/.exec(t)?.[1] ?? null;
+  return {
+    nombre: cap(name),
+    dia_semana: day ? COURSE_DAYS.indexOf(day[1]) + 1 : null,
+    hora_inicio: start,
+    hora_fin: end,
+    hasta: until,
+    profesor: teacher,
+    en_grupo: group,
+    evaluaciones: evals ? cap(evals) : null,
+  };
+}
+
+/** Lo que falta para completar un ramo: el asistente lo pregunta (usuario, 26-10-2026). */
+export function courseQuestions(input: Record<string, unknown>): string | null {
+  const ask: string[] = [];
+  if (!input.dia_semana) ask.push('¿qué día de la semana es la clase?');
+  if (!input.hora_inicio) ask.push('¿a qué hora empieza?');
+  else if (!input.hora_fin) ask.push(`¿hasta qué hora dura la clase de las ${input.hora_inicio}?`);
+  if (!input.profesor) ask.push('¿quién es el profesor o la profesora?');
+  if (!input.evaluaciones) ask.push('¿hay pruebas, controles o trabajos? (con su fecha y porcentaje, si los sabes)');
+  if (input.en_grupo === null || input.en_grupo === undefined) ask.push('¿los trabajos son en grupo o individuales?');
+  if (!input.hasta) ask.push('¿cuándo termina el semestre o trimestre?');
+  if (!ask.length) return null;
+  return `Armé el ramo con lo que me dijiste. Para completarlo en Estudios, Calendario y Prioridades me falta saber:\n${ask.map((q) => `• ${q.replace(/^(¿?)(.)/, (_, a: string, b: string) => a + b.toUpperCase())}`).join('\n')}\nToca «Corregir» en la tarjeta para completarlo, o confírmalo así y lo completas después en Estudios.`;
+}
+
 function parseClause(clause: string, ctx: Ctx): ToolCall[] {
   const t = fold(clause);
   if (!t) return [];
@@ -317,6 +374,13 @@ function parseClause(clause: string, ctx: Ctx): ToolCall[] {
     const target = /\b(\d{1,2})\b/.exec(name);
     const clean = rest(name, [target?.[0]], ['dejar', 'bajar', 'menos', 'reducir', 'veces', 'diarias', 'dia', 'al']);
     return clean ? [{ name: 'crear_habito', input: { nombre: cap(clean), tipo: reduce ? 'reducir' : 'bueno', meta_diaria: target ? Number(target[1]) : 1 } }] : [];
+  }
+
+  // Ramo o curso (26-10-2026, prueba del usuario): «tengo un ramo llamado Ingeniería económica
+  // todos los jueves a las 10:00 hasta que termine el trimestre en diciembre».
+  if (/\b(?:ramo|asignatura|catedra|materia|curso|clases? de)\b/.test(t) && COURSE_DAY.test(t)) {
+    const input = parseCourse(clause, t, ctx.today);
+    if (input) return [{ name: 'crear_ramo', input }];
   }
 
   // Tarea: «tarea pagar la luz», «tengo que…», «hay que…», «recuérdame…».
@@ -449,11 +513,12 @@ export const HELP = [
   '• «tarea pagar la luz el viernes»',
   '• «hoy fue un buen día, salí con mi familia»',
   '• «agradezco el almuerzo con mi mamá»',
+  '• «tengo el ramo Cálculo los martes de 20:30 a 22:00»',
   '• «¿cuánto gasté este mes?» o «¿qué tengo mañana?»',
   'Y si me enseñas («cuando digo la Copec es bencina»), lo aprendo.',
 ].join('\n');
 
-const WHOLE = new Set(['crear_evento', 'escribir_diario', 'recordar', 'agradecer', 'crear_tarea']);
+const WHOLE = new Set(['crear_evento', 'escribir_diario', 'recordar', 'agradecer', 'crear_tarea', 'crear_ramo']);
 
 /** Interpreta un mensaje. Puede traer varias acciones («almorcé 6 lucas y tomé 2 vasos de agua»). */
 export function parseMessage(text: string, ctx: Ctx, data: IntentData): LocalResult {
@@ -463,6 +528,7 @@ export function parseMessage(text: string, ctx: Ctx, data: IntentData): LocalRes
   // Los eventos, las tareas, el diario, la gratitud y las reglas van enteros (sus comas son parte
   // de lo que se dice). Lo demás se separa por «y», comas y puntos.
   const whole = parseClause(text, ctx);
+  if (whole[0]?.name === 'crear_ramo') return { reply: courseQuestions(whole[0].input), calls: whole };
   if (whole.length && (WHOLE.has(whole[0].name) || !/\s+y\s+|[,;]|\.\s/.test(text))) return { reply: null, calls: whole };
   const calls: ToolCall[] = [];
   let carry = '';

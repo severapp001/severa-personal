@@ -24,6 +24,10 @@ export type EventInput = {
   remind_minutes: number | null;
   location: string | null;
   notes: string | null;
+  /** 0 normal · 1 prioridad del día · 2 urgente (26-10-2026). */
+  importance?: number;
+  /** Hasta cuándo se repite (vacío = siempre). */
+  repeat_until?: string | null;
 };
 export type TaskInput = { title: string; due_on: string | null; due_at: string | null; urgent: boolean; notes?: string | null };
 
@@ -52,7 +56,7 @@ export function useAgenda(from: string, to: string) {
     events,
     tasks,
     states,
-    addEvent: (v: EventInput) => add('calendar_events', v),
+    addEvent: (v: EventInput) => add('calendar_events', { ...v, importance: v.importance ?? 0, repeat_until: v.repeat_until ?? null }),
     updateEvent: (id: string, v: Partial<EventInput>) => updateRecord('calendar_events', id, v),
     removeEvent: (id: string) => deleteRecord('calendar_events', id),
     addTask: (v: TaskInput) => add('tasks', { title: v.title, due_on: v.due_on, due_at: v.due_at, urgent: v.urgent, notes: v.notes ?? null, status: 'pending', done_on: null, moved_from: null }),

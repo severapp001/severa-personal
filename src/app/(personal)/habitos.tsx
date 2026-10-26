@@ -9,11 +9,12 @@ import { ModuleHeader } from '@/features/space/ModuleHeader';
 import { useTheme } from '@/theme/ThemeProvider';
 import { AppText, Button, Screen } from '@/ui';
 import { tap } from '@/ui/haptics';
-import { MinusIcon, PlusIcon } from '@/ui/icons';
+import { MinusIcon, PlusIcon, XIcon } from '@/ui/icons';
 import { Empty, Kicker, Panel } from '@/ui/kit';
 
-// Hábitos (F14): los tuyos con el conteo de hoy, y la lista de sugerencias con buscador para
-// sumar más o crear uno propio. Mantén presionado un hábito para dejar de contarlo.
+// Hábitos (F14): los tuyos con el conteo de hoy, separados en «para sumar» y «para bajar»
+// (26-10-2026), y la lista de sugerencias por grupos con buscador para sumar más o crear uno
+// propio. La X deja de contar un hábito (lo contado se guarda).
 
 export default function HabitosScreen() {
   const { colors } = useTheme();
@@ -36,54 +37,67 @@ export default function HabitosScreen() {
   return (
     <Screen>
       <ModuleHeader kicker="Personal" title="Hábitos" />
-      <Panel>
-        <Kicker>Hoy</Kicker>
-        {h.habits.length ? (
-          h.habits.map((x) => {
-            const n = h.countFor(x.id);
-            const target = Number(x.daily_target) || 1;
-            const reduce = x.direction === 'reduce';
-            const done = !reduce && n >= target;
-            return (
-              <Pressable
-                key={x.id}
-                onLongPress={() =>
-                  Alert.alert('¿Dejar de contar?', `«${x.name}» sale de tus hábitos. Lo ya contado se guarda.`, [
-                    { text: 'Cancelar', style: 'cancel' },
-                    { text: 'Dejar de contar', style: 'destructive', onPress: () => h.archive(x.id) },
-                  ])
-                }
-                style={[styles.row, { borderBottomColor: colors.line }]}
-              >
-                <View style={{ flex: 1, gap: 2 }}>
-                  <AppText variant="label" style={{ fontSize: 15 }} color={done ? colors.ok : colors.text}>
-                    {x.name}
-                  </AppText>
-                  <AppText variant="caption" muted>
-                    {reduce ? (n ? `Hoy: ${n}. Sin culpas, solo números.` : 'Hoy: ninguno.') : `${n} de ${target}${x.unit ? ` ${x.unit}` : ''}${done ? ' · ¡listo!' : ''}`}
-                  </AppText>
-                </View>
-                <Pressable accessibilityRole="button" accessibilityLabel={`Restar: ${x.name}`} onPress={() => n && h.log(x.id, -1)} style={[styles.btn, { backgroundColor: colors.surface2 }]}>
-                  <MinusIcon size={18} color={colors.muted} />
-                </Pressable>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={`Sumar: ${x.name}`}
-                  onPress={() => {
-                    tap();
-                    h.log(x.id, 1);
-                  }}
-                  style={[styles.btn, { backgroundColor: reduce ? colors.midSoft : colors.accentSoft }]}
-                >
-                  <PlusIcon size={18} color={reduce ? colors.mid : colors.accent} />
-                </Pressable>
-              </Pressable>
-            );
-          })
-        ) : (
+      {h.habits.length ? (
+        ([
+          ['Para sumar', h.good, false],
+          ['Para bajar', h.reduce, true],
+        ] as const).map(([label, list, reduce]) =>
+          list.length ? (
+            <Panel key={label}>
+              <Kicker color={reduce ? colors.mid : colors.accent}>{`${label} · hoy`}</Kicker>
+              {list.map((x) => {
+                const n = h.countFor(x.id);
+                const target = Number(x.daily_target) || 1;
+                const done = !reduce && n >= target;
+                return (
+                  <View key={x.id} style={[styles.row, { borderBottomColor: colors.line }]}>
+                    <View style={{ flex: 1, gap: 2 }}>
+                      <AppText variant="label" style={{ fontSize: 15 }} color={done ? colors.ok : colors.text}>
+                        {x.name}
+                      </AppText>
+                      <AppText variant="caption" muted>
+                        {reduce ? (n ? `Hoy: ${n}. Sin culpas, solo números.` : 'Hoy: ninguno.') : `${n} de ${target}${x.unit ? ` ${x.unit}` : ''}${done ? ' · ¡listo!' : ''}`}
+                      </AppText>
+                    </View>
+                    <Pressable accessibilityRole="button" accessibilityLabel={`Restar: ${x.name}`} onPress={() => n && h.log(x.id, -1)} style={[styles.btn, { backgroundColor: colors.surface2 }]}>
+                      <MinusIcon size={18} color={colors.muted} />
+                    </Pressable>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`Sumar: ${x.name}`}
+                      onPress={() => {
+                        tap();
+                        h.log(x.id, 1);
+                      }}
+                      style={[styles.btn, { backgroundColor: reduce ? colors.midSoft : colors.accentSoft }]}
+                    >
+                      <PlusIcon size={18} color={reduce ? colors.mid : colors.accent} />
+                    </Pressable>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`Quitar: ${x.name}`}
+                      hitSlop={6}
+                      onPress={() =>
+                        Alert.alert('¿Dejar de contar?', `«${x.name}» sale de tus hábitos. Lo ya contado se guarda.`, [
+                          { text: 'Cancelar', style: 'cancel' },
+                          { text: 'Quitar', style: 'destructive', onPress: () => h.archive(x.id) },
+                        ])
+                      }
+                      style={styles.remove}
+                    >
+                      <XIcon size={16} color={colors.muted} />
+                    </Pressable>
+                  </View>
+                );
+              })}
+            </Panel>
+          ) : null,
+        )
+      ) : (
+        <Panel>
           <Empty text="Elige abajo los hábitos que quieres contar." />
-        )}
-      </Panel>
+        </Panel>
+      )}
       {/* Con hábitos ya elegidos, la lista de sugerencias queda guardada detrás de un botón
           (pedido del usuario, 25-10-2026). */}
       {h.habits.length && !picking ? (
@@ -107,4 +121,5 @@ export default function HabitosScreen() {
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
   btn: { width: 40, height: 40, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
+  remove: { width: 28, height: 40, alignItems: 'center', justifyContent: 'center' },
 });

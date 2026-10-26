@@ -9,7 +9,7 @@ import { useJournal } from './journal';
 import { useAuth } from './auth';
 import { useFinance } from './finance';
 import { bool } from './live';
-import { useHabits } from './modules';
+import { useHabits, useStudies } from './modules';
 import { db } from './powersync/database';
 import { deleteRecord, insertRecord, usePersonalSpace, useRecords } from './records';
 import { supabase } from './supabase';
@@ -157,6 +157,7 @@ export function useAssistantActions(day: string) {
   const habits = useHabits(day);
   const lessons = useLessons();
   const agenda = useAgenda(day, day);
+  const studies = useStudies();
   const journal = useJournal();
 
   async function execute(p: Proposal, refs: Refs): Promise<void> {
@@ -211,6 +212,18 @@ export function useAssistantActions(day: string) {
       case 'agradecer':
         await journal.addGratitude(p.date, p.text);
         return;
+      case 'crear_ramo': {
+        // El ramo queda en Estudios con su clase semanal (y en Tu día ese día de la semana).
+        const notes = [p.until ? `hasta ${p.until}` : null, p.group === null ? null : p.group ? 'trabajos en grupo' : 'individual', p.evaluations].filter(Boolean).join(' · ');
+        const courseId = await studies.addCourse({ name: p.name, teacher: p.teacher, term: notes || null });
+        if (p.weekday && p.start) {
+          const [h, m] = p.start.split(':').map(Number);
+          const endMin = h * 60 + m + 90;
+          const end = p.end ?? `${String(Math.min(23, Math.floor(endMin / 60))).padStart(2, '0')}:${String(endMin >= 1440 ? 59 : endMin % 60).padStart(2, '0')}`;
+          await studies.addBlock({ course_id: courseId, weekday: p.weekday, starts_at: p.start, ends_at: end, room: null });
+        }
+        return;
+      }
     }
   }
 

@@ -1,7 +1,11 @@
-// Neuronas que ya tienen pantalla propia. Las demás abren su hoja en el cerebro.
-// 18-10-2026: Finanzas, Estudios, Familia, CV y Hábitos. 25-10-2026: Calendario, Prioridades,
-// Diario y Gratitud (las dos en la pantalla del Diario) y la Biblia.
-export const MODULE_ROUTES: Record<string, '/finanzas' | '/estudios' | '/familia' | '/cv' | '/habitos' | '/calendario' | '/prioridades' | '/diario' | '/biblia'> = {
+import type { Href } from 'expo-router';
+
+import { MODULES } from '@/features/modules/catalog';
+
+// Dónde se abre cada neurona. 18-10-2026: Finanzas, Estudios, Familia, CV y Hábitos. 25-10-2026:
+// Calendario, Prioridades, Diario y Gratitud y la Biblia. 26-10-2026 (revisión del usuario: «los
+// módulos aún no sirven»): todas las demás, con el motor común (`/modulo/[code]`) o su pantalla.
+const OWN: Record<string, Href> = {
   finanzas: '/finanzas',
   estudios: '/estudios',
   familia_y_mascotas: '/familia',
@@ -10,6 +14,24 @@ export const MODULE_ROUTES: Record<string, '/finanzas' | '/estudios' | '/familia
   calendario: '/calendario',
   prioridades: '/prioridades',
   diario: '/diario',
-  gratitud: '/diario',
+  gratitud: { pathname: '/diario', params: { tab: 'gratitud' } },
   biblia: '/biblia',
+  perfil_personal: '/perfil',
+  resumen: '/resumen',
+  logros: '/logros',
+  juegos: '/juegos',
+  trabajo: '/trabajo',
+  jornada: '/trabajo',
+  recorridos: '/trabajo',
+  agenda_y_citas: '/calendario',
+  gastos_del_trabajo: { pathname: '/finanzas', params: { nuevo: 'expense' } },
+  habitos_rapidos_en_trabajo: '/habitos',
+};
+
+/** La pantalla de un módulo del motor común. */
+export const moduleHref = (code: string, nuevo?: string): Href => ({ pathname: '/modulo/[code]', params: nuevo ? { code, nuevo } : { code } });
+
+export const MODULE_ROUTES: Record<string, Href> = {
+  ...Object.fromEntries(Object.keys(MODULES).map((code) => [code, moduleHref(code)])),
+  ...OWN,
 };

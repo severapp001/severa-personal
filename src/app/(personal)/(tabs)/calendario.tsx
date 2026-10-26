@@ -1,5 +1,7 @@
+import { useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
+import Svg, { Circle } from 'react-native-svg';
 
 import { eventsOn, eventTime, longDay, monthGrid, monthLabel, type CalendarEvent, type Task } from '@/core/agenda';
 import { dayKey } from '@/core/today';
@@ -20,6 +22,8 @@ import { CaretLeftIcon, CaretRightIcon, CheckIcon } from '@/ui/icons';
 // Calendario (MD4, 25-10-2026, con la primera versión como referencia): el mes completo con
 // eventos y feriados, el día elegido con sus eventos y tareas, y hoy la línea del día al estilo
 // Structured. Tocar un día lo elige; mantenerlo presionado agrega un evento ese día.
+// 26-10-2026 (usuario: «algo diferenciador»): cada día tiene un anillo que se llena con lo
+// cumplido de su agenda y un punto con el color del ánimo del Diario.
 
 const SHORT = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 
@@ -29,7 +33,9 @@ export default function CalendarioScreen() {
   const today = dayKey(t.now);
   const [month, setMonth] = useState({ y: t.now.getFullYear(), m: t.now.getMonth() });
   const [selected, setSelected] = useState(today);
-  const [target, setTarget] = useState<AgendaTarget | null>(null);
+  // Desde el + se llega con ?nuevo=event o ?nuevo=task (26-10-2026).
+  const { nuevo } = useLocalSearchParams<{ nuevo?: string }>();
+  const [target, setTarget] = useState<AgendaTarget | null>(nuevo === 'event' || nuevo === 'task' ? { kind: nuevo } : null);
   const weeks = monthGrid(month.y, month.m);
   const agenda = useAgenda(weeks[0][0].day, weeks.at(-1)!.at(-1)!.day);
   const holidays = useHolidays();
@@ -75,7 +81,12 @@ export default function CalendarioScreen() {
             {w.map(({ day, inMonth }) => {
               const isToday = day === today;
               const isSel = day === selected;
-              const count = eventsOn(agenda.events, day).length + agenda.tasks.filter((x) => x.due_on === day && x.status === 'pending').length;
+              const evs = eventsOn(agenda.events, day);
+              const tks = agenda.tasks.filter((x) => x.due_on === day && x.status !== 'dismissed');
+              const count = evs.length + tks.filter((x) => x.status === 'pending').length;
+              const total = evs.length + tks.length;
+              const doneN = evs.filter((e) => agenda.states.some((st) => st.day === day && st.origin_type === 'event' && st.origin_id === e.id && st.status === 'done')).length + tks.filter((x) => x.status === 'done').length;
+              const ratio = total ? doneN / total : 0;
               const holiday = holidays.get(day);
               return (
                 <Pressable
@@ -92,7 +103,14 @@ export default function CalendarioScreen() {
                   }}
                   style={styles.cell}
                 >
-                  <View style={[styles.num, isSel && { backgroundColor: colors.accent }, !isSel && isToday && { borderColor: colors.accent, borderWidth: 2 }]}>
+                  <View style={[styles.num, isSel && { backgroundColor: colors.accent }]}>
+                    {total && !isSel ? (
+                      <Svg width={38} height={38} style={StyleSheet.absoluteFill}>
+                        <Circle cx={19} cy={19} r={16} stroke={colors.surface2} strokeWidth={3} fill="none" />
+                        {ratio ? <Circle cx={19} cy={19} r={16} stroke={ratio === 1 ? colors.ok : colors.accent2} strokeWidth={3} fill="none" strokeDasharray={`${2 * Math.PI * 16 * ratio} ${2 * Math.PI * 16}`} strokeLinecap="round" rotation={-90} origin="19, 19" /> : null}
+                      </Svg>
+                    ) : null}
+                    {!isSel && isToday && !total ? <View style={[StyleSheet.absoluteFill, { borderRadius: 19, borderWidth: 2, borderColor: colors.accent }]} /> : null}
                     <AppText
                       variant="label"
                       color={isSel ? colors.onAccent : holiday ? colors.bad : inMonth ? colors.text : colors.muted}
@@ -103,9 +121,7 @@ export default function CalendarioScreen() {
                   </View>
                   <View style={styles.dots}>
                     {mood.has(day) ? <View style={[styles.mood, { backgroundColor: moodColor(mood.get(day)) }]} /> : null}
-                    {Array.from({ length: Math.min(3, count) }, (_, i) => (
-                      <View key={i} style={[styles.dot, { backgroundColor: colors.accent2 }]} />
-                    ))}
+                    {count && !mood.has(day) ? <AppText style={{ fontSize: 9, lineHeight: 10, fontFamily: fonts.bold }} color={colors.muted}>{String(count)}</AppText> : null}
                   </View>
                 </Pressable>
               );
@@ -114,6 +130,9 @@ export default function CalendarioScreen() {
         ))}
       </View>
 
+      <AppText variant="caption" muted style={{ textAlign: 'center', marginTop: -6 }}>
+        El anillo se llena con lo cumplido del día · el punto es tu ánimo del Diario
+      </AppText>
       <Card kicker={selected === today ? 'Hoy' : 'Día elegido'} title={longDay(selected)}>
         {holidays.get(selected) ? (
           <AppText variant="caption" color={colors.bad}>
@@ -121,7 +140,7 @@ export default function CalendarioScreen() {
           </AppText>
         ) : null}
         {dayEvents.map((e) => (
-          <Row key={e.id} title={e.title} sub={`${eventTime(e)}${e.location ? ` · ${e.location}` : ''}`} done={eventDone(e)} onCheck={() => agenda.setState(selected, 'event', e.id, eventDone(e) ? null : 'done')} onOpen={() => setTarget({ kind: 'event', event: e })} />
+          <Row key={e.id} title={`${Number(e.importance) === 2 ? '‼ ' : Number(e.importance) === 1 ? '★ ' : ''}${e.title}`} sub={`${eventTime(e)}${e.location ? ` · ${e.location}` : ''}`} done={eventDone(e)} onCheck={() => agenda.setState(selected, 'event', e.id, eventDone(e) ? null : 'done')} onOpen={() => setTarget({ kind: 'event', event: e })} />
         ))}
         {dayTasks.map((x: Task) => (
           <Row key={x.id} title={x.title} sub={x.due_at ? `Tarea · ${x.due_at.slice(0, 5)}` : 'Tarea'} done={x.status === 'done'} onCheck={() => agenda.completeTask(x.id, x.status !== 'done', selected)} onOpen={() => setTarget({ kind: 'task', task: x })} />
@@ -194,10 +213,9 @@ const styles = StyleSheet.create({
   week: { flexDirection: 'row' },
   head: { flex: 1, textAlign: 'center', fontFamily: fonts.bold, fontSize: 11, paddingVertical: 4 },
   cell: { flex: 1, alignItems: 'center', paddingVertical: 3, gap: 2 },
-  num: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
-  dots: { flexDirection: 'row', gap: 2, height: 5 },
-  dot: { width: 5, height: 5, borderRadius: 3 },
-  mood: { width: 10, height: 5, borderRadius: 3 },
+  num: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
+  dots: { flexDirection: 'row', gap: 2, height: 10, alignItems: 'center' },
+  mood: { width: 8, height: 8, borderRadius: 4 },
   row: { flexDirection: 'row', alignItems: 'center', gap: space.md, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth },
   check: { width: 28, height: 28, borderRadius: 9, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
 });

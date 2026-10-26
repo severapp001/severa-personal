@@ -113,9 +113,14 @@ function byCategory(list: Movement[], names: Map<string, string>, fallback: stri
 }
 
 /** Lo que se ganó y se gastó en el mes. Las transferencias no cuentan; de un pago de deuda, solo los intereses. */
-export function incomeStatement(movements: Movement[], categories: Category[], month: string): IncomeStatement {
+/**
+ * Estado de resultados de un mes («AAAA-MM») o de un período consolidado { from, to } con fechas
+ * «AAAA-MM-DD» (usuario, 26-10-2026: «debería ser uno consolidado con la opción de elegir fechas»).
+ */
+export function incomeStatement(movements: Movement[], categories: Category[], period: string | { from: string; to: string }): IncomeStatement {
   const names = new Map(categories.map((c) => [c.id, c.name]));
-  const inMonth = movements.filter((m) => monthOf(m.occurred_on) === month);
+  const month = typeof period === 'string' ? period : `${period.from}…${period.to}`;
+  const inMonth = movements.filter((m) => (typeof period === 'string' ? monthOf(m.occurred_on) === period : m.occurred_on >= period.from && m.occurred_on <= period.to));
   const incomes = inMonth.filter((m) => m.kind === 'income');
   const expenses = inMonth.filter((m) => m.kind === 'expense');
   const interest = inMonth.filter((m) => m.kind === 'debt_payment').reduce((s, m) => s + (Number(m.interest) || 0), 0);
@@ -189,6 +194,18 @@ export function cashFlow(movements: Movement[], accounts: Account[], months: str
 }
 
 // ─── Consejos (como la «retroalimentación financiera» de la primera versión) ──
+
+/** Flujo de caja por año (suma de los meses de cada año). */
+export function cashFlowByYear(movements: Movement[], accounts: Account[], years: number[]): CashFlowMonth[] {
+  let cumulative = 0;
+  return years.map((y) => {
+    const months = cashFlow(movements, accounts, Array.from({ length: 12 }, (_, i) => `${y}-${String(i + 1).padStart(2, '0')}`));
+    const inflow = months.reduce((s, m) => s + m.inflow, 0);
+    const outflow = months.reduce((s, m) => s + m.outflow, 0);
+    cumulative += inflow - outflow;
+    return { month: String(y), inflow, outflow, net: inflow - outflow, cumulative };
+  });
+}
 
 export function advice(current: IncomeStatement, previous: IncomeStatement | null): string[] {
   const tips: string[] = [];

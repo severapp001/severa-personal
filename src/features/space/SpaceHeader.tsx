@@ -6,13 +6,14 @@ import Animated, { interpolateColor, useAnimatedStyle, useSharedValue, withTimin
 import { useTheme } from '@/theme/ThemeProvider';
 import { personalThemes, type SpaceMode } from '@/theme/tokens';
 import { AppText } from '@/ui';
+import { GearIcon } from '@/ui/icons';
 import { Logo } from '@/ui/Logo';
 import { useCross } from './SpaceCross';
 
 // Variante B (decidida el 18-10-2026): arriba, el logo abre el cerebro y el interruptor
 // Personal/Trabajo queda al lado, siempre a la vista.
 
-const SWITCH_WIDTH = 176;
+const SWITCH_WIDTH = 168;
 
 export function SpaceSwitch() {
   const { mode, theme, colors } = useTheme();
@@ -70,12 +71,30 @@ export function BrainButton({ pip }: { pip?: boolean }) {
   );
 }
 
-/** Barra superior de Hoy: cerebro a la izquierda e interruptor a la derecha. */
+/** Ajustes salió de la barra de abajo para dar lugar a Trabajo (26-10-2026). */
+export function SettingsButton() {
+  const { colors } = useTheme();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Ajustes"
+      onPress={() => router.push('/ajustes')}
+      style={({ pressed }) => [styles.brain, { backgroundColor: colors.surface, opacity: pressed ? 0.8 : 1 }]}
+    >
+      <GearIcon size={22} color={colors.text} />
+    </Pressable>
+  );
+}
+
+/** Barra superior de Hoy: cerebro a la izquierda, interruptor y ajustes a la derecha. */
 export function SpaceTopBar({ pip }: { pip?: boolean }) {
   return (
     <View style={styles.bar}>
       <BrainButton pip={pip} />
-      <SpaceSwitch />
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <SpaceSwitch />
+        <SettingsButton />
+      </View>
     </View>
   );
 }

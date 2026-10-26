@@ -53,6 +53,8 @@ streams:
       - SELECT * FROM bible_marks WHERE space_id IN (SELECT space_id FROM space_members WHERE account_id = auth.user_id() AND status = 'active')
       # Asistente (25-10-2026): lo que Severa aprendió de las correcciones del usuario.
       - SELECT * FROM assistant_lessons WHERE space_id IN (SELECT space_id FROM space_members WHERE account_id = auth.user_id() AND status = 'active')
+      # Motor común de los módulos (26-10-2026): Salud, Ejercicio, Alimentación, Mis trabajos y más.
+      - SELECT * FROM module_entries WHERE space_id IN (SELECT space_id FROM space_members WHERE account_id = auth.user_id() AND status = 'active')
 
   # Catálogos de Severa: iguales para todos, de solo lectura (funcionan sin conexión).
   catalogos:

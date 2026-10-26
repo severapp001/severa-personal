@@ -7,6 +7,8 @@ import { dayKey, minutesNow, personalDay, toMinutes, type DayItem } from '@/core
 import { useAgenda } from '@/data/agenda';
 import { useAuth } from '@/data/auth';
 import { useDayMarks, setMark } from '@/data/day';
+import { useEntries } from '@/data/entries';
+import { useStudies } from '@/data/modules';
 import { useHabitTemplates, useNeurons, useNotInterested, useOnboarding, useSelfPerson, useSynapses, useTrades, useUserNeurons } from '@/data/discovery';
 
 // Todo lo que necesita Hoy, armado con lo que la persona contó en Conocerte y lo que marca en el día.
@@ -62,6 +64,21 @@ export function useToday() {
       .filter((x) => x.due_on === day && hhmm(x.due_at) && x.status !== 'dismissed')
       .map((x) => ({ id: `task:${x.id}`, t: toMinutes(hhmm(x.due_at))!, title: x.title, sub: 'Tarea', icon: 'flag' as const })),
   ];
+  // Las clases de hoy (Estudios) y los bloques de Tu rutina también entran a la línea (26-10-2026).
+  const studies = useStudies();
+  const routineBlocks = useEntries(['estudios', 'tu_rutina']);
+  const weekday = now.getDay() === 0 ? 7 : now.getDay();
+  const DOW = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+  const programs = routineBlocks.of('programa');
+  for (const b of studies.blocks.filter((x) => Number(x.weekday) === weekday)) {
+    const course = studies.courses.find((c) => c.id === b.course_id);
+    const program = programs.find((p) => p.id === course?.program_id);
+    if (!course || course.archived || (program?.day && program.day > day) || (program?.until && program.until < day)) continue;
+    agendaItems.push({ id: `clase:${b.id}`, t: toMinutes(b.starts_at.slice(0, 5))!, end: toMinutes(b.ends_at.slice(0, 5)) ?? undefined, title: `Clase: ${course.name}`, sub: `Estudios${b.room ? ` · sala ${b.room}` : ''}`, icon: 'book' });
+  }
+  for (const r of routineBlocks.of('bloque').filter((x) => Array.isArray(x.data.dias) && (x.data.dias as string[]).includes(DOW[weekday - 1]) && x.data.desde)) {
+    agendaItems.push({ id: `rutina:${r.id}`, t: toMinutes(String(r.data.desde))!, end: toMinutes(String(r.data.hasta ?? '')) ?? undefined, title: r.title ?? 'Rutina', sub: 'Tu rutina', icon: 'flag' });
+  }
   const agendaKey = agendaItems.map((i) => `${i.id}@${i.t}-${i.end ?? ''}:${i.title}`).join('|');
   const items: DayItem[] = useMemo(
     () => [...personalDay({ wake: horario.despierta, sleep: horario.duerme, on, routine, works, habits: chosenHabits }), ...agendaItems].sort((a, b) => a.t - b.t),

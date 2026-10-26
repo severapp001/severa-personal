@@ -19,6 +19,7 @@ export default function TabsLayout() {
       >
         <Tabs.Screen name="index" />
         <Tabs.Screen name="calendario" />
+        <Tabs.Screen name="trabajo" />
         <Tabs.Screen name="modulos" />
         <Tabs.Screen name="ajustes" />
       </Tabs>

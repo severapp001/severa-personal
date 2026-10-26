@@ -25,7 +25,8 @@ export function ModuleHeader({ title, kicker, right }: { title: string; kicker?:
             {kicker.toUpperCase()}
           </AppText>
         ) : null}
-        <AppText variant="title" numberOfLines={1}>
+        {/* Los nombres largos («Gastos compartidos») bajan de tamaño en vez de cortarse. */}
+        <AppText variant="title" numberOfLines={2} style={title.length > 16 ? { fontSize: 23, lineHeight: 28 } : undefined}>
           {title}
         </AppText>
       </View>

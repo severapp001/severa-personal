@@ -3,12 +3,14 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import type { NeuronState } from '@/core/discovery';
+import { LiveBrain } from '@/features/discovery/LiveBrain';
 import { NeuronSheet } from '@/features/discovery/NeuronSheet';
+import { SettingsButton } from '@/features/space/SpaceHeader';
 import { MODULE_ROUTES } from '@/features/space/moduleRoutes';
 import { useToday } from '@/features/today/useToday';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fonts, personalThemes } from '@/theme/tokens';
-import { AppText, Button, Screen } from '@/ui';
+import { AppText, Screen } from '@/ui';
 
 // Módulos: las neuronas en lista, por hemisferio. Tocar una abre su hoja (qué es, lo mínimo,
 // con qué se conecta). El mapa completo está en el cerebro.
@@ -19,6 +21,7 @@ export default function ModulosScreen() {
   const { colors, theme, mode } = useTheme();
   const t = useToday();
   const [sheet, setSheet] = useState<string | null>(null);
+  const [brainW, setBrainW] = useState(0);
   const base = personalThemes[theme];
   const groups = (mode === 'work' ? (['work', 'personal', 'bridge'] as const) : (['personal', 'work', 'bridge'] as const)).map((h) => ({
     h,
@@ -28,8 +31,17 @@ export default function ModulosScreen() {
 
   return (
     <Screen>
-      <AppText variant="title">Módulos</AppText>
-      <Button label="Ver el cerebro completo" kind="secondary" onPress={() => router.push('/cerebro')} />
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <AppText variant="title">Módulos</AppText>
+        <SettingsButton />
+      </View>
+      {/* El cerebro vivo como portada: se toca para entrar (26-10-2026). */}
+      <Pressable accessibilityRole="button" accessibilityLabel="Abrir tu cerebro" onPress={() => router.push('/cerebro')} onLayout={(e) => setBrainW(e.nativeEvent.layout.width - 24)} style={[styles.brain, { backgroundColor: colors.surface }]}>
+        {brainW > 0 ? <LiveBrain neurons={t.neurons} synapses={t.synapses} states={t.states} width={brainW} impulses={10} /> : <View style={{ height: 180 }} />}
+        <AppText variant="label" color={colors.accent} style={{ textAlign: 'center' }}>
+          Abrir tu cerebro y ver las conexiones
+        </AppText>
+      </Pressable>
       {groups.map(({ h, list }) => (
         <View key={h} style={{ gap: 8 }}>
           <AppText variant="caption" color={h === 'work' ? base.accent2 : h === 'bridge' ? colors.text : base.accent} style={styles.kicker}>
@@ -79,4 +91,5 @@ const styles = StyleSheet.create({
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   tile: { width: '31%', flexGrow: 1, minHeight: 92, borderRadius: 18, padding: 12, gap: 6 },
   dot: { width: 12, height: 12, borderRadius: 6, borderWidth: 2 },
+  brain: { borderRadius: 24, padding: 12, gap: 8, overflow: 'hidden' },
 });

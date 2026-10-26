@@ -1,40 +1,28 @@
-import { router } from 'expo-router';
 import type { BottomTabBarProps } from 'expo-router/js-tabs';
 import { useState } from 'react';
-import { Modal, Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { dayKey } from '@/core/today';
 import { setMark, useDayMarks } from '@/data/day';
-import { useHabits } from '@/data/modules';
 import { QuickHabitsBar } from '@/features/today/WorkToday';
+import { QuickPanel } from './QuickPanel';
 import { useTheme } from '@/theme/ThemeProvider';
-import { fonts, radius, space } from '@/theme/tokens';
+import { fonts } from '@/theme/tokens';
 import { AppText } from '@/ui';
 import { tap } from '@/ui/haptics';
-import {
-  CalendarBlankIcon,
-  CheckIcon,
-  CoffeeIcon,
-  DropIcon,
-  GearIcon,
-  HouseIcon,
-  PencilSimpleIcon,
-  PlusIcon,
-  SquaresFourIcon,
-  WalletIcon,
-  type Icon,
-} from '@/ui/icons';
+import { BriefcaseIcon, CalendarBlankIcon, HouseIcon, PlusIcon, SquaresFourIcon, type Icon } from '@/ui/icons';
 
-// Barra inferior (sistema de diseño §5): Hoy · Calendario · + · Módulos · Ajustes. En Trabajo,
-// encima va la barra de hábitos rápidos (A3). El + abre el registro rápido (F03). El asistente
-// tiene su propio botón flotante (AssistantFab).
+// Barra inferior (sistema de diseño §5). Desde el 26-10-2026 (usuario: «Trabajo debería tener su
+// botón en la barra»): Hoy · Calendario · + · Trabajo · Módulos; Ajustes queda en el engranaje de
+// arriba. En Trabajo, encima va la barra de hábitos rápidos (A3). El + abre el registro rápido
+// personalizable (QuickPanel). El asistente tiene su propio botón flotante (AssistantFab).
 
 const TABS: Record<string, { label: string; Icon: Icon }> = {
   index: { label: 'Hoy', Icon: HouseIcon },
   calendario: { label: 'Calendario', Icon: CalendarBlankIcon },
+  trabajo: { label: 'Trabajo', Icon: BriefcaseIcon },
   modulos: { label: 'Módulos', Icon: SquaresFourIcon },
-  ajustes: { label: 'Ajustes', Icon: GearIcon },
 };
 
 export function TabBar({ state, navigation, onHeight }: BottomTabBarProps & { onHeight?: (height: number) => void }) {
@@ -92,82 +80,8 @@ export function TabBar({ state, navigation, onHeight }: BottomTabBarProps & { on
         </Pressable>
         {routes.slice(2).map((r) => tabButton(r.name))}
       </View>
-      <QuickSheet visible={quick} onClose={() => setQuick(false)} day={day} pauses={marks['h:pausa']?.value ?? 0} />
+      <QuickPanel visible={quick} onClose={() => setQuick(false)} day={day} pauses={marks['h:pausa']?.value ?? 0} />
     </View>
-  );
-}
-
-function QuickSheet({ visible, onClose, day, pauses }: { visible: boolean; onClose: () => void; day: string; pauses: number }) {
-  const { colors, mode } = useTheme();
-  const insets = useSafeAreaInsets();
-  const [note, setNote] = useState<string | null>(null);
-  // El agua suma al hábito Agua (el mismo de Personal y Trabajo); si no lo cuentas, abre Hábitos.
-  const h = useHabits(day);
-  const water = h.habits.find((x) => x.template_code === 'agua') ?? h.habits.find((x) => /agua/i.test(x.name));
-  const options: { label: string; Icon: Icon; ready?: () => string; later?: string; go?: () => void }[] = [
-    water
-      ? {
-          label: 'Agua',
-          Icon: DropIcon,
-          ready: () => {
-            const n = h.countFor(water.id) + 1;
-            h.log(water.id, 1);
-            return `${water.name}: ${n} de ${Number(water.daily_target) || 1}`;
-          },
-        }
-      : { label: 'Agua', Icon: DropIcon, go: () => router.push('/habitos') },
-    mode === 'work'
-      ? { label: 'Pausa', Icon: CoffeeIcon, ready: () => (setMark(day, 'h:pausa', { value: pauses + 1 }), 'Pausa registrada') }
-      : { label: 'Tarea', Icon: CheckIcon, go: () => router.push('/prioridades') },
-    { label: 'Gasto', Icon: WalletIcon, go: () => router.push({ pathname: '/finanzas', params: { nuevo: 'expense' } }) },
-    { label: 'Ingreso', Icon: PlusIcon, go: () => router.push({ pathname: '/finanzas', params: { nuevo: 'income' } }) },
-    { label: 'Hábito', Icon: CheckIcon, go: () => router.push('/habitos') },
-    { label: 'Diario', Icon: PencilSimpleIcon, go: () => router.push('/diario') },
-  ];
-  return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel="Cerrar" />
-      <View style={[styles.sheet, { backgroundColor: colors.surface, paddingBottom: insets.bottom + space.lg }]}>
-        <AppText variant="subtitle">Registro rápido</AppText>
-        {note ? (
-          <AppText variant="caption" color={colors.accent}>
-            {note}
-          </AppText>
-        ) : (
-          <AppText variant="caption" muted>
-            Toca lo que quieres anotar.
-          </AppText>
-        )}
-        <View style={styles.grid}>
-          {options.map(({ label, Icon, ready, later, go }) => (
-            <Pressable
-              key={label}
-              accessibilityRole="button"
-              onPress={() => {
-                tap();
-                if (go) {
-                  onClose();
-                  go();
-                  return;
-                }
-                setNote(ready ? ready() : (later ?? null));
-              }}
-              style={[styles.option, { backgroundColor: colors.surface2 }]}
-            >
-              <Icon size={24} color={colors.accent} />
-              <AppText variant="label" style={{ fontSize: 13 }}>
-                {label}
-              </AppText>
-              {later ? (
-                <AppText variant="caption" muted style={{ fontSize: 11 }}>
-                  Pronto
-                </AppText>
-              ) : null}
-            </Pressable>
-          ))}
-        </View>
-      </View>
-    </Modal>
   );
 }
 
@@ -176,8 +90,4 @@ const styles = StyleSheet.create({
   tab: { flex: 1, alignItems: 'center', gap: 3, paddingVertical: 4 },
   label: { fontFamily: fonts.bold, fontSize: 11 },
   plus: { width: 52, height: 52, borderRadius: 18, alignItems: 'center', justifyContent: 'center', marginTop: -22 },
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
-  sheet: { borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: space.xl, gap: space.md },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  option: { width: '48%', flexGrow: 1, borderRadius: radius.md, padding: space.md, alignItems: 'center', gap: 4 },
 });

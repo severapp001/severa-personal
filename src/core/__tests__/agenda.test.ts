@@ -91,11 +91,21 @@ describe('dailyPriorities', () => {
       birthdays: [{ id: 'k', name: 'Cami', birth_date: '2018-10-25' }],
       habits: { done: 1, total: 3 },
     });
-    expect(list.map((i) => i.key)).toEqual(['task:vieja', 'event:dentista', 'task:luz', 'assessment:p1', 'birthday:k', 'habits']);
+    // Lo urgente va antes que lo que tiene hora (26-10-2026).
+    expect(list.map((i) => i.key)).toEqual(['task:vieja', 'task:luz', 'event:dentista', 'assessment:p1', 'birthday:k', 'habits']);
     expect(list[0].sub).toBe('Atrasada · era para el 20-10');
     expect(list[3].title).toBe('Estudiar para: Prueba de cálculo');
     expect(list[4].sub).toBe('Cumple 8');
     expect(list[5].sub).toBe('1 de 3 hechos');
+  });
+
+  it('pone primero el evento marcado como prioridad del día y lo señala', () => {
+    const list = dailyPriorities({
+      ...base,
+      events: [ev('reunion', '2026-10-25', { starts_at: '09:00:00' }), ev('clase', '2026-10-25', { starts_at: '20:30:00', importance: 1 } as never)],
+    });
+    expect(list.map((i) => i.key)).toEqual(['event:clase', 'event:reunion']);
+    expect(list[0].title.startsWith('★')).toBe(true);
   });
 
   it('lo marcado va al final y lo descartado no aparece', () => {

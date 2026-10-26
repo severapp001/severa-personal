@@ -273,6 +273,7 @@ const study_courses = new Table({
   color: column.text,
   pass_grade: column.real,
   archived: column.integer,
+  program_id: column.text,
   ...owned,
 });
 const study_blocks = new Table(
@@ -321,6 +322,8 @@ const calendar_events = new Table(
     remind_minutes: column.integer,
     location: column.text,
     notes: column.text,
+    importance: column.integer,
+    repeat_until: column.text,
     ...owned,
   },
   { indexes: { date: ['space_id', 'event_date'] } },
@@ -374,6 +377,27 @@ const assistant_messages = new Table(
 
 // Solo en este teléfono (no se sincroniza): lo que se marca en Hoy mientras llegan las tablas
 // definitivas de hábitos, prioridades y jornada (MD5, MD7). id = «día:ítem».
+// Motor común de los módulos (26-10-2026): Salud, Ejercicio, Alimentación, Gastos compartidos,
+// Viajes, Mis trabajos y los demás que aún no tienen tabla propia. `data` es texto JSON.
+const module_entries = new Table(
+  {
+    module: column.text,
+    kind: column.text,
+    parent_id: column.text,
+    person_id: column.text,
+    title: column.text,
+    body: column.text,
+    day: column.text,
+    until: column.text,
+    amount: column.real,
+    value: column.real,
+    done: column.integer,
+    data: column.text,
+    ...owned,
+  },
+  { indexes: { module: ['space_id', 'module', 'kind'], parent: ['parent_id'] } },
+);
+
 const day_marks = new Table(
   {
     day: column.text,
@@ -387,6 +411,7 @@ const day_marks = new Table(
 
 export const AppSchema = new Schema({
   day_marks,
+  module_entries,
   calendar_events,
   tasks,
   daily_priorities,

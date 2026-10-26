@@ -1,81 +1,75 @@
-import { useEffect, useState } from 'react';
+import { router } from 'expo-router';
+import { useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { eventsOn, hhmm } from '@/core/agenda';
 import { displayAmount, formatCLP } from '@/core/money';
-import { duration, minutesNow, type DayItem } from '@/core/today';
+import { duration, minutesNow, toMinutes, type DayItem } from '@/core/today';
+import { useAgenda } from '@/data/agenda';
+import { useEntries, type Entry } from '@/data/entries';
 import { useFinance } from '@/data/finance';
 import { useHabits } from '@/data/modules';
 import { useAmountVisibility } from '@/features/privacy/useAmountVisibility';
+import { activeJobs, byTrips, clock, endOf, logOf, nowSec, startOf, tramoEarnings, useNowSec, worksOn, type LogItem } from '@/features/work/jobs';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fonts, radius, space } from '@/theme/tokens';
 import { AppText, Button, EyeButton } from '@/ui';
 import { tap } from '@/ui/haptics';
-import { CoffeeIcon, DropIcon } from '@/ui/icons';
+import { CheckIcon, CoffeeIcon, DropIcon, PlusIcon } from '@/ui/icons';
 import { DayLineCompact, DayLineFull } from './DayLine';
-import { Card, PrioritiesCard } from './PersonalCards';
+import { Card } from './PersonalCards';
 import type { Today } from './useToday';
 
-// Trabajo en modo foco (A3, F28): la jornada, su línea y los hábitos rápidos. Mientras llegan las
-// tablas de la jornada (MD7), lo que se registra queda en este teléfono.
+// Trabajo en modo foco (A3, F28). Desde el 26-10-2026 la jornada es por tramos y por trabajo
+// (shopper de 7 a 13, Uber hasta las 17…), se guarda sincronizada (motor común, módulo «trabajo»)
+// y el cronómetro avanza de verdad. Al terminar un tramo, lo ganado y la bencina pasan a Finanzas.
 
-type LogEntry = { t: number; kind: 'trip' | 'fuel'; a: number };
+/** Los trabajos, los tramos de hoy y las acciones de la jornada. */
+export function useWork(day: string) {
+  const store = useEntries('trabajo');
+  const finance = useFinance();
+  const jobs = store.of('trabajo');
+  const tramos = store.of('tramo');
+  const open = tramos.find((x) => !endOf(x)) ?? null;
+  const today = tramos.filter((x) => x.day === day).sort((a, b) => startOf(a) - startOf(b));
+  const jobOf = (x: Entry | null) => (x ? (jobs.find((j) => j.id === x.parent_id) ?? null) : null);
 
-const nowSec = () => Math.floor(Date.now() / 1000);
-const minOfDay = (sec: number) => minutesNow(new Date(sec * 1000));
-
-function useJornada(t: Today) {
-  const start = t.marks['j:start']?.value || null;
-  const end = t.marks['j:end']?.value || null;
-  let log: LogEntry[] = [];
-  try {
-    log = JSON.parse(t.marks['j:log']?.text ?? '[]') as LogEntry[];
-  } catch {
-    log = [];
+  async function close(tramo: Entry) {
+    const end = nowSec();
+    const job = jobOf(tramo);
+    const r = tramoEarnings({ ...tramo, data: { ...tramo.data, end } }, job, end);
+    await store.update(tramo.id, { data: { ...tramo.data, end }, amount: r.earned, value: Math.round(r.hours * 100) / 100 });
+    // Un cobro de Trabajo es el ingreso de Finanzas (MD3): lo ganado y la bencina pasan solos.
+    try {
+      const cat = (code: string) => finance.categories.find((c) => (c as { code?: string }).code === code)?.id ?? null;
+      const name = job?.title ?? 'Trabajo';
+      if (r.earned && job?.data.pago !== 'Sueldo mensual') await finance.addMovement({ kind: 'income', amount: r.earned, occurred_on: tramo.day ?? day, account_id: null, category_id: cat('work_income'), description: `Jornada · ${name}${r.trips ? ` · ${r.trips} viajes` : ''} · ${duration(Math.round(r.hours * 60))}` });
+      if (r.fuel) await finance.addMovement({ kind: 'expense', amount: r.fuel, occurred_on: tramo.day ?? day, account_id: null, category_id: cat('fuel'), description: `Bencina · ${name}` });
+    } catch {
+      // Si aún no carga el espacio, el tramo queda cerrado igual; se puede registrar a mano.
+    }
   }
-  const trips = log.filter((e) => e.kind === 'trip');
-  const earned = trips.reduce((s, e) => s + e.a, 0);
-  const fuel = log.filter((e) => e.kind === 'fuel').reduce((s, e) => s + e.a, 0);
-  const add = (kind: LogEntry['kind'], a: number) => t.setMark('j:log', { text: JSON.stringify([...log, { t: nowSec(), kind, a }]) });
-  return { start, end, log, trips, earned, fuel, net: earned - fuel, add };
+
+  return {
+    store,
+    jobs,
+    tramos,
+    open,
+    today,
+    jobOf,
+    addJob: (title: string, oficio?: string | null) => store.add({ kind: 'trabajo', title, data: { oficio: oficio ?? null, pago: oficio && /Conductor|Shopper/.test(oficio) ? 'Por viaje o pedido' : null } }),
+    /** Empieza un tramo; si había otro abierto, lo cierra (cambiar de trabajo). */
+    start: async (job: Entry) => {
+      if (open) await close(open);
+      await store.add({ kind: 'tramo', parent_id: job.id, day, title: job.title, data: { start: nowSec(), end: null, log: [] } });
+    },
+    close,
+    log: (tramo: Entry, kind: LogItem['kind'], a: number) => store.update(tramo.id, { data: { ...tramo.data, log: [...logOf(tramo), { t: nowSec(), kind, a }] } }),
+  };
 }
 
-function useTicker(active: boolean) {
-  const [, setTick] = useState(0);
-  useEffect(() => {
-    if (!active) return;
-    const id = setInterval(() => setTick((x) => x + 1), 1000);
-    return () => clearInterval(id);
-  }, [active]);
-}
-
-const clock = (secs: number) =>
-  [Math.floor(secs / 3600), Math.floor(secs / 60) % 60, secs % 60].map((v) => String(Math.max(0, v)).padStart(2, '0')).join(':');
-
-/** Los ítems de la línea del día en Trabajo, armados con lo registrado. */
-export function workItems(t: Today, j: ReturnType<typeof useJornada>): DayItem[] {
-  const items: DayItem[] = [];
-  if (!j.start) {
-    items.push({ id: 'w-start', t: t.nowMin, title: 'Empezar jornada', sub: 'Cuando partas, toca Empezar', icon: 'play', work: true });
-    return items;
-  }
-  items.push({ id: 'w-start', t: minOfDay(j.start), title: 'Empezar jornada', sub: 'Conductor', icon: 'play', work: true });
-  j.log.forEach((e, i) =>
-    items.push({
-      id: `w-log-${i}`,
-      t: minOfDay(e.t),
-      title: e.kind === 'trip' ? `Viaje ${j.log.slice(0, i + 1).filter((x) => x.kind === 'trip').length}` : 'Bencina',
-      sub: e.kind === 'trip' ? 'Ganado' : 'Gasto del trabajo',
-      icon: e.kind === 'trip' ? 'car' : 'coffee',
-      work: true,
-    }),
-  );
-  if (t.marks['h:pausa']?.value) items.push({ id: 'w-pausa', t: t.nowMin - 1, title: 'Pausa', sub: `${t.marks['h:pausa'].value} hoy`, icon: 'coffee', work: true });
-  items.push({ id: 'w-end', t: j.end ? minOfDay(j.end) : Math.max(t.nowMin + 1, minOfDay(j.start) + 1), title: 'Cerrar jornada', sub: j.end ? 'Ganancia neta calculada' : 'Calcula tu ganancia neta', icon: 'flag', work: true });
-  return items.sort((a, b) => a.t - b.t);
-}
-
-function AmountSheet({ kind, onClose, onSave }: { kind: LogEntry['kind'] | null; onClose: () => void; onSave: (a: number) => void }) {
+function AmountSheet({ kind, onClose, onSave }: { kind: LogItem['kind'] | null; onClose: () => void; onSave: (a: number) => void }) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const [value, setValue] = useState('');
@@ -92,7 +86,7 @@ function AmountSheet({ kind, onClose, onSave }: { kind: LogEntry['kind'] | null;
     <Modal visible transparent animationType="slide" onRequestClose={onClose}>
       <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel="Cerrar" />
       <View style={[styles.sheet, { backgroundColor: colors.surface, paddingBottom: insets.bottom + space.lg }]}>
-        <AppText variant="subtitle">{kind === 'trip' ? '¿Cuánto ganaste en el viaje?' : '¿Cuánto cargaste de bencina?'}</AppText>
+        <AppText variant="subtitle">{kind === 'trip' ? '¿Cuánto ganaste en el viaje?' : kind === 'fuel' ? '¿Cuánto cargaste de bencina?' : '¿Cuánto ganaste?'}</AppText>
         <TextInput
           autoFocus
           value={value ? formatCLP(amount) : ''}
@@ -115,114 +109,138 @@ function AmountSheet({ kind, onClose, onSave }: { kind: LogEntry['kind'] | null;
   );
 }
 
+/** Botones para empezar (o cambiar a) cada trabajo vigente. */
+function JobChips({ jobs, current, onPick }: { jobs: Entry[]; current: string | null; onPick: (j: Entry) => void }) {
+  const { colors } = useTheme();
+  return (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+      {jobs.map((j) => {
+        const on = j.id === current;
+        return (
+          <Pressable
+            key={j.id}
+            accessibilityRole="button"
+            disabled={on}
+            onPress={() => {
+              tap();
+              onPick(j);
+            }}
+            style={[styles.job, { backgroundColor: on ? colors.accent : colors.surface2 }]}
+          >
+            <AppText variant="label" color={on ? colors.onAccent : colors.text}>
+              {on ? `● ${j.title}` : `▶ ${j.title}`}
+            </AppText>
+          </Pressable>
+        );
+      })}
+    </ScrollView>
+  );
+}
+
 export function JornadaCard({ t }: { t: Today }) {
   const { colors } = useTheme();
   const money = useAmountVisibility();
-  const f = useFinance();
-  const j = useJornada(t);
-  const [sheet, setSheet] = useState<LogEntry['kind'] | null>(null);
-  const [confirm, setConfirm] = useState(false);
-  const running = !!j.start && !j.end;
-  useTicker(running);
+  const w = useWork(t.day);
+  const [sheet, setSheet] = useState<LogItem['kind'] | null>(null);
+  const now = useNowSec(!!w.open);
   const show = (n: number) => displayAmount(n, money.visible);
-  const stats = (
-    <View style={styles.stats}>
-      {[
-        ['Viajes', String(j.trips.length)],
-        ['Ganado', show(j.earned)],
-        ['Bencina', show(j.fuel)],
-      ].map(([k, v]) => (
-        <View key={k} style={[styles.stat, { backgroundColor: colors.surface2 }]}>
-          <AppText variant="caption" muted>
-            {k}
-          </AppText>
-          <AppText variant="label" style={{ fontSize: 16, fontVariant: ['tabular-nums'] }} numberOfLines={1}>
-            {v}
-          </AppText>
-        </View>
-      ))}
-    </View>
+  const jobs = activeJobs(w.jobs, t.day);
+  const weekday = t.now.getDay();
+  const planned = jobs.filter((j) => worksOn(j, weekday));
+
+  if (!w.jobs.length) {
+    return (
+      <Card kicker="Jornada de hoy" title={t.trade ? `Empieza como ${t.trade.name}` : 'Agrega tu primer trabajo'}>
+        <AppText variant="caption" muted>
+          Severa cuenta el tiempo de cada trabajo, tus viajes y la bencina, y al terminar te dice cuánto ganaste de verdad. Puedes tener varios trabajos y cambiar entre ellos en el día.
+        </AppText>
+        {t.trade ? (
+          <Button
+            label={`Empezar jornada · ${t.trade.name}`}
+            onPress={async () => {
+              const id = await w.addJob(t.trade!.name, /conductor|uber|shopper|repart/i.test(t.trade!.name) ? 'Conductor de aplicaciones' : null);
+              await w.start({ id, title: t.trade!.name } as Entry);
+            }}
+          />
+        ) : null}
+        <Button label="Mis trabajos" kind="secondary" onPress={() => router.navigate('/trabajo')} />
+      </Card>
+    );
+  }
+
+  const totals = w.today.reduce(
+    (s, x) => {
+      const r = tramoEarnings(x, w.jobOf(x), now);
+      return { earned: s.earned + r.earned, fuel: s.fuel + r.fuel, hours: s.hours + r.hours };
+    },
+    { earned: 0, fuel: 0, hours: 0 },
   );
 
-  if (!j.start) {
+  if (!w.open) {
     return (
-      <Card kicker={`Jornada de hoy${t.trade ? ` · ${t.trade.name}` : ''}`} title="Cuando partas, empieza tu jornada">
+      <Card kicker={w.today.length ? `Hoy · ${duration(Math.round(totals.hours * 60))} trabajadas` : 'Jornada de hoy'} title={w.today.length ? `Ganancia neta ${show(totals.earned - totals.fuel)}` : '¿Con qué trabajo partes?'} right={w.today.length ? <EyeButton visible={money.visible} onPress={money.toggle} /> : undefined}>
+        {planned.length && !w.today.length ? <AppText variant="caption" muted>{`Hoy te toca: ${planned.map((j) => `${j.title}${j.data.desde ? ` (${j.data.desde}${j.data.hasta ? `–${j.data.hasta}` : ''})` : ''}`).join(' · ')}`}</AppText> : null}
+        <JobChips jobs={jobs.length ? jobs : w.jobs} current={null} onPick={(j) => w.start(j)} />
         <AppText variant="caption" muted>
-          Severa cuenta el tiempo, tus viajes y la bencina, y al cerrar te dice cuánto ganaste de verdad.
-        </AppText>
-        <Button
-          label="Empezar jornada"
-          onPress={() => {
-            tap();
-            t.setMark('j:start', { value: nowSec() });
-          }}
-        />
-      </Card>
-    );
-  }
-
-  const elapsed = (j.end ?? nowSec()) - j.start;
-  if (j.end) {
-    const hours = Math.max(elapsed / 3600, 1 / 60);
-    return (
-      <Card kicker={`Jornada cerrada · ${duration(Math.round(elapsed / 60))}`} title={`Ganancia neta ${show(j.net)}`} right={<EyeButton visible={money.visible} onPress={money.toggle} />}>
-        {stats}
-        <AppText variant="caption" muted>
-          {`${show(j.net / hours)} por hora. Lo ganado y la bencina ya quedaron en tus Finanzas.`}
+          Toca un trabajo para empezar a contar. Si en el día cambias de trabajo, tocas el otro.
         </AppText>
       </Card>
     );
   }
 
+  const job = w.jobOf(w.open);
+  const r = tramoEarnings(w.open, job, now);
+  const trips = byTrips(job);
   return (
-    <Card kicker="En jornada" right={<EyeButton visible={money.visible} onPress={money.toggle} />}>
-      <AppText style={{ fontFamily: fonts.extrabold, fontSize: 34, letterSpacing: -0.5, fontVariant: ['tabular-nums'] }}>{clock(elapsed)}</AppText>
-      {stats}
+    <Card kicker={`En jornada · ${job?.title ?? 'Trabajo'}`} right={<EyeButton visible={money.visible} onPress={money.toggle} />}>
+      <AppText style={{ fontFamily: fonts.extrabold, fontSize: 36, letterSpacing: -0.5, fontVariant: ['tabular-nums'] }} accessibilityLiveRegion="none">
+        {clock(now - startOf(w.open))}
+      </AppText>
+      <View style={styles.stats}>
+        {(trips
+          ? [
+              ['Viajes', String(r.trips)],
+              ['Ganado', show(r.earned)],
+              ['Bencina', show(r.fuel)],
+            ]
+          : [
+              ['Horas', r.hours.toFixed(1).replace('.', ',')],
+              ['Ganado', show(r.earned)],
+              ['Hoy', show(totals.earned)],
+            ]
+        ).map(([k, v]) => (
+          <View key={k} style={[styles.stat, { backgroundColor: colors.surface2 }]}>
+            <AppText variant="caption" muted>
+              {k}
+            </AppText>
+            <AppText variant="label" style={{ fontSize: 16, fontVariant: ['tabular-nums'] }} numberOfLines={1}>
+              {v}
+            </AppText>
+          </View>
+        ))}
+      </View>
       <View style={{ flexDirection: 'row', gap: 8 }}>
         <View style={{ flex: 1 }}>
-          <Button label="+ Viaje" onPress={() => setSheet('trip')} />
+          <Button label={trips ? '+ Viaje' : '+ Ingreso'} onPress={() => setSheet(trips ? 'trip' : 'income')} />
         </View>
         <View style={{ flex: 1 }}>
-          <Button label="+ Bencina" kind="secondary" onPress={() => setSheet('fuel')} />
+          <Button label={trips ? '+ Bencina' : 'Terminar'} kind="secondary" onPress={() => (trips ? setSheet('fuel') : w.close(w.open!))} />
         </View>
       </View>
-      {confirm ? (
-        <View style={[styles.confirm, { backgroundColor: colors.surface2 }]}>
-          <AppText variant="label">{`Ganado ${show(j.earned)} − bencina ${show(j.fuel)} = ${show(j.net)} neto`}</AppText>
-          <View style={{ flexDirection: 'row', gap: 8 }}>
-            <View style={{ flex: 1 }}>
-              <Button label="Seguir" kind="secondary" onPress={() => setConfirm(false)} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Button
-                label="Cerrar jornada"
-                onPress={async () => {
-                  tap();
-                  await t.setMark('j:end', { value: nowSec() });
-                  setConfirm(false);
-                  // Un cobro de Trabajo es el ingreso de Finanzas (MD3): lo ganado y la bencina pasan solos.
-                  const cat = (code: string) => f.categories.find((c) => (c as { code?: string }).code === code)?.id ?? null;
-                  const day = t.day;
-                  const name = t.trade?.name ?? 'Trabajo';
-                  try {
-                    if (j.earned) await f.addMovement({ kind: 'income', amount: j.earned, occurred_on: day, account_id: null, category_id: cat('work_income'), description: `Jornada · ${name} · ${j.trips.length} viajes` });
-                    if (j.fuel) await f.addMovement({ kind: 'expense', amount: j.fuel, occurred_on: day, account_id: null, category_id: cat('fuel'), description: `Bencina · ${name}` });
-                  } catch {
-                    // Si aún no carga el espacio, la jornada queda cerrada igual; se puede registrar a mano.
-                  }
-                }}
-              />
-            </View>
-          </View>
-        </View>
-      ) : (
-        <Button label="Cerrar jornada" kind="link" onPress={() => setConfirm(true)} />
-      )}
+      {jobs.length > 1 ? (
+        <>
+          <AppText variant="caption" muted>
+            Cambiar de trabajo (cierra este tramo y empieza el otro)
+          </AppText>
+          <JobChips jobs={jobs} current={job?.id ?? null} onPick={(j) => w.start(j)} />
+        </>
+      ) : null}
+      {trips ? <Button label={`Terminar tramo · neto ${show(r.net)}`} kind="link" onPress={() => w.close(w.open!)} /> : null}
       <AmountSheet
         kind={sheet}
         onClose={() => setSheet(null)}
         onSave={(a) => {
-          if (sheet) j.add(sheet, a);
+          if (sheet && w.open) w.log(w.open, sheet, a);
           setSheet(null);
         }}
       />
@@ -230,18 +248,86 @@ export function JornadaCard({ t }: { t: Today }) {
   );
 }
 
+/** Los ítems de la línea del día en Trabajo: lo planificado en la agenda y los tramos. */
+function useWorkItems(t: Today, now: number): DayItem[] {
+  const w = useWork(t.day);
+  const agenda = useAgenda(t.day, t.day);
+  const items: DayItem[] = [];
+  for (const e of eventsOn(agenda.events, t.day).filter((e) => e.layer === 'trabajo' && hhmm(e.starts_at))) {
+    items.push({ id: `ev:${e.id}`, t: toMinutes(hhmm(e.starts_at))!, end: toMinutes(hhmm(e.ends_at)) ?? undefined, title: e.title, sub: 'Planificado', icon: 'briefcase', work: true });
+  }
+  for (const x of w.today) {
+    const r = tramoEarnings(x, w.jobOf(x), now);
+    const start = minutesNow(new Date(startOf(x) * 1000));
+    const end = endOf(x) ? minutesNow(new Date(endOf(x)! * 1000)) : undefined;
+    items.push({ id: `tramo:${x.id}`, t: start, end: end && end > start ? end : undefined, title: x.title ?? 'Tramo', sub: end ? `${duration(Math.round(r.hours * 60))} · ganado` : 'En curso', icon: 'car', work: true });
+  }
+  if (!items.length) items.push({ id: 'w-start', t: t.nowMin, title: 'Empezar jornada', sub: 'Toca un trabajo para partir', icon: 'play', work: true });
+  return items.sort((a, b) => a.t - b.t);
+}
+
 export function WorkLineCard({ t }: { t: Today }) {
-  const j = useJornada(t);
-  const items = workItems(t, j);
+  const w = useWork(t.day);
+  const now = useNowSec(false);
+  const items = useWorkItems(t, now);
   return (
-    <Card kicker="Tu jornada en línea" title={j.end ? 'Jornada cerrada' : j.start ? `${j.trips.length} ${j.trips.length === 1 ? 'viaje' : 'viajes'} hasta ahora` : 'Todavía no empiezas'}>
-      <DayLineCompact items={items} now={t.nowMin} done={(id) => id === 'w-start' ? !!j.start : id === 'w-end' ? !!j.end : id.startsWith('w-log') || id === 'w-pausa'} onToggle={() => undefined} />
+    <Card kicker="Tu jornada en línea" title={w.today.length ? `${w.today.length} ${w.today.length === 1 ? 'tramo' : 'tramos'} hoy` : 'Todavía no empiezas'}>
+      <DayLineCompact items={items} now={t.nowMin} done={(id) => id.startsWith('tramo:') && !!endOf(w.today.find((x) => `tramo:${x.id}` === id)!)} onToggle={() => undefined} />
     </Card>
   );
 }
 
+/** Tareas del trabajo (módulo «tareas_del_trabajo»), separadas de las personales. */
 export function WorkTasksCard({ t }: { t: Today }) {
-  return <PrioritiesCard t={t} prefix="wt" kicker="Tareas del trabajo" empty="Lo pendiente del trabajo" placeholder="Por ejemplo: pagar el TAG" />;
+  const { colors } = useTheme();
+  const store = useEntries('tareas_del_trabajo');
+  const [draft, setDraft] = useState('');
+  const list = store.of('tarea').filter((x) => !x.done || x.day === t.day).slice(0, 8);
+  const add = async () => {
+    const title = draft.trim();
+    if (!title) return;
+    tap();
+    setDraft('');
+    await store.add({ kind: 'tarea', title, day: t.day });
+  };
+  return (
+    <Card kicker="Tareas del trabajo" title={list.length ? `${list.filter((x) => x.done).length} de ${list.length} listas` : 'Lo pendiente del trabajo'}>
+      {list.map((x) => (
+        <View key={x.id} style={styles.line}>
+          <AppText variant="label" style={{ flex: 1, fontSize: 15, textDecorationLine: x.done ? 'line-through' : 'none' }} color={x.done ? colors.muted : colors.text}>
+            {x.title}
+          </AppText>
+          <Pressable
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: x.done }}
+            accessibilityLabel={x.title ?? ''}
+            hitSlop={8}
+            onPress={() => {
+              tap();
+              store.update(x.id, { done: !x.done, day: t.day });
+            }}
+            style={[styles.check, { backgroundColor: x.done ? colors.accent : 'transparent', borderColor: x.done ? colors.accent : colors.line }]}
+          >
+            {x.done ? <CheckIcon size={15} weight="bold" color={colors.onAccent} /> : null}
+          </Pressable>
+        </View>
+      ))}
+      <View style={[styles.input, { backgroundColor: colors.surface2 }]}>
+        <TextInput
+          value={draft}
+          onChangeText={setDraft}
+          placeholder="Por ejemplo: pagar el TAG"
+          placeholderTextColor={colors.muted}
+          onSubmitEditing={add}
+          returnKeyType="done"
+          style={{ flex: 1, color: colors.text, fontFamily: fonts.medium, fontSize: 15, paddingVertical: 10 }}
+        />
+        <Pressable accessibilityRole="button" accessibilityLabel="Agregar tarea" onPress={add} hitSlop={8}>
+          <PlusIcon size={20} color={draft.trim() ? colors.accent : colors.muted} />
+        </Pressable>
+      </View>
+    </Card>
+  );
 }
 
 /** Barra de hábitos rápidos sobre la navegación de Trabajo (A3): se suma sin cruzar a Personal.
@@ -250,7 +336,7 @@ export function WorkTasksCard({ t }: { t: Today }) {
 export function QuickHabitsBar({ day, pauses, onPause }: { day: string; pauses: number; onPause: () => void }) {
   const { colors } = useTheme();
   const h = useHabits(day);
-  const shown = h.habits.slice(0, 3);
+  const shown = [...h.good].sort((a, b) => Number(b.template_code === 'agua') - Number(a.template_code === 'agua')).slice(0, 3);
   return (
     <ScrollView
       horizontal
@@ -264,7 +350,6 @@ export function QuickHabitsBar({ day, pauses, onPause }: { day: string; pauses: 
       {shown.map((x) => {
         const n = h.countFor(x.id);
         const target = Number(x.daily_target) || 1;
-        const reduce = x.direction === 'reduce';
         return (
           <Pressable
             key={x.id}
@@ -272,7 +357,7 @@ export function QuickHabitsBar({ day, pauses, onPause }: { day: string; pauses: 
             accessibilityLabel={`Sumar: ${x.name}`}
             onPress={() => {
               tap();
-              if (reduce || n < target) h.log(x.id, 1);
+              if (n < target) h.log(x.id, 1);
             }}
             onLongPress={() => n && h.log(x.id, -1)}
             style={[styles.qpill, { backgroundColor: colors.surface2 }]}
@@ -281,8 +366,8 @@ export function QuickHabitsBar({ day, pauses, onPause }: { day: string; pauses: 
             <AppText variant="label" numberOfLines={1} style={{ fontSize: 13, maxWidth: 110 }}>
               {x.name}
             </AppText>
-            <AppText variant="label" color={reduce ? colors.mid : n >= target ? colors.ok : colors.accent} style={{ fontSize: 13, fontVariant: ['tabular-nums'] }}>
-              {reduce ? n : `${n}/${target}`}
+            <AppText variant="label" color={n >= target ? colors.ok : colors.accent} style={{ fontSize: 13, fontVariant: ['tabular-nums'] }}>
+              {`${n}/${target}`}
             </AppText>
           </Pressable>
         );
@@ -310,28 +395,25 @@ export function QuickHabitsBar({ day, pauses, onPause }: { day: string; pauses: 
   );
 }
 
+/** La jornada completa, para Calendario en Trabajo. */
+export function WorkDayFull({ t }: { t: Today }) {
+  const w = useWork(t.day);
+  const now = useNowSec(false);
+  const items = useWorkItems(t, now);
+  return <DayLineFull items={items} now={t.nowMin} done={(id) => id.startsWith('tramo:') && !!endOf(w.today.find((x) => `tramo:${x.id}` === id)!)} onToggle={() => undefined} />;
+}
+
 const styles = StyleSheet.create({
   stats: { flexDirection: 'row', gap: 8 },
   stat: { flex: 1, borderRadius: 14, padding: 10, gap: 2, minWidth: 0 },
-  confirm: { borderRadius: radius.md, padding: space.md, gap: space.md },
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
   sheet: { borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: space.xl, gap: space.md },
   amountInput: { borderRadius: radius.md, paddingHorizontal: space.lg, paddingVertical: 14, fontFamily: fonts.extrabold, fontSize: 28 },
   quick: { flex: 1, borderRadius: radius.md, paddingVertical: 12, alignItems: 'center' },
   quickBar: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: space.md, paddingVertical: 8 },
   qpill: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 999, paddingHorizontal: 11, paddingVertical: 7 },
+  job: { borderRadius: radius.pill, paddingHorizontal: 16, paddingVertical: 11 },
+  line: { flexDirection: 'row', alignItems: 'center', gap: space.md, minHeight: 40 },
+  check: { width: 30, height: 30, borderRadius: 10, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
+  input: { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 14, paddingHorizontal: 12 },
 });
-
-/** La jornada completa, para Calendario en Trabajo. */
-export function WorkDayFull({ t }: { t: Today }) {
-  const j = useJornada(t);
-  const items = workItems(t, j);
-  return (
-    <DayLineFull
-      items={items}
-      now={t.nowMin}
-      done={(id) => (id === 'w-start' ? !!j.start : id === 'w-end' ? !!j.end : id.startsWith('w-log') || id === 'w-pausa')}
-      onToggle={() => undefined}
-    />
-  );
-}

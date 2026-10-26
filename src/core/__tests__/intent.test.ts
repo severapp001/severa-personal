@@ -121,3 +121,23 @@ describe('aprende de las correcciones', () => {
     expect(next.input.categoria).toBe('c2');
   });
 });
+
+describe('ramos (26-10-2026)', () => {
+  it('entiende el ramo del usuario y pregunta lo que falta', () => {
+    const r = parseMessage('Tengo un ramo de universidad llamado Ingenieria economica todos los jueves a las 10:00 hasta que termine el trimestre en diciembre', ctx, data);
+    expect(r.calls).toEqual([
+      {
+        name: 'crear_ramo',
+        input: { nombre: 'Ingenieria economica', dia_semana: 4, hora_inicio: '10:00', hora_fin: null, hasta: '2026-12-31', profesor: null, en_grupo: null, evaluaciones: null },
+      },
+    ]);
+    expect(r.reply).toContain('¿Hasta qué hora dura la clase de las 10:00?');
+    expect(r.reply).toContain('profesor');
+    expect(r.reply).toContain('grupo');
+  });
+
+  it('lee el rango de horas, el profesor y si es en grupo', () => {
+    const [c] = one('tengo el ramo Cálculo los martes de 20:30 a 22:00 con el profesor Pérez, trabajos en grupo');
+    expect(c.input).toMatchObject({ nombre: 'Cálculo', dia_semana: 2, hora_inicio: '20:30', hora_fin: '22:00', profesor: 'Pérez', en_grupo: true, evaluaciones: 'Trabajos' });
+  });
+});

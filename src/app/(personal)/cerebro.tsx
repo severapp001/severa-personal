@@ -3,20 +3,20 @@ import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { useAnimatedReaction, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
-import Svg, { Circle, G, Line, Path, Text as SvgText } from 'react-native-svg';
 import { scheduleOnRN } from 'react-native-worklets';
 
-import { layoutBrain, type NeuronState } from '@/core/discovery';
+import { layoutBrain } from '@/core/discovery';
+import { LiveBrain } from '@/features/discovery/LiveBrain';
 import { NeuronSheet } from '@/features/discovery/NeuronSheet';
 import { useCross } from '@/features/space/SpaceCross';
 import { useToday } from '@/features/today/useToday';
 import { useTheme } from '@/theme/ThemeProvider';
-import { fonts, personalThemes, type SpaceMode } from '@/theme/tokens';
+import { type SpaceMode } from '@/theme/tokens';
 import { AppText, Button, Screen } from '@/ui';
 import { tap } from '@/ui/haptics';
 import { MinusIcon, PlusIcon, CornersOutIcon, XIcon } from '@/ui/icons';
 
-// El cerebro (A2, vista previa del 17-10-2026): Personal a la izquierda y Trabajo a la derecha.
+// El cerebro (A2, vista previa del 17-10-2026; vivo desde el 26-10-2026): Personal a la izquierda y Trabajo a la derecha.
 // Se acerca pellizcando o con + y −, se mueve arrastrando y cada neurona se toca para ver su hoja.
 // Desde aquí se entra a un hemisferio.
 
@@ -25,13 +25,9 @@ const H = 290;
 const MIN = 1;
 const MAX = 4;
 const LABELS_FROM = 1.6;
-const isOn = (s?: NeuronState) => s === 'discovered' || s === 'suggested';
-const HALF_P = 'M171 8 A166 136 0 0 0 171 282 Z';
-const HALF_T = 'M179 8 A166 136 0 0 1 179 282 Z';
 
 export default function CerebroScreen() {
-  const { colors, theme, mode } = useTheme();
-  const base = personalThemes[theme];
+  const { colors, mode } = useTheme();
   const cross = useCross();
   const t = useToday();
   const { width } = useWindowDimensions();
@@ -167,7 +163,6 @@ export default function CerebroScreen() {
 
   const target: SpaceMode = hemi === 'all' ? mode : hemi;
   const neuron = sheet ? (t.neurons.find((n) => n.code === sheet) ?? null) : null;
-  const colorOf = (h: string) => (h === 'work' ? base.accent2 : h === 'bridge' ? colors.text : base.accent);
 
   return (
     <Screen scroll={false}>
@@ -203,41 +198,7 @@ export default function CerebroScreen() {
         <GestureDetector gesture={gestures}>
           <View style={{ width: stageW, height: stageH, overflow: 'visible' }} collapsable={false}>
             <Animated.View style={[{ width: stageW, height: stageH }, content]}>
-              <Svg width={stageW} height={stageH} viewBox={`0 0 ${W} ${H}`}>
-                <Path d={HALF_P} fill={base.accent} fillOpacity={0.05} stroke={base.accent} strokeOpacity={0.22} />
-                <Path d={HALF_T} fill={base.accent2} fillOpacity={0.05} stroke={base.accent2} strokeOpacity={0.22} />
-                {t.synapses.map((s) => {
-                  const a = pos[s.neuron_a];
-                  const b = pos[s.neuron_b];
-                  const onA = isOn(t.states[s.neuron_a]);
-                  const onB = isOn(t.states[s.neuron_b]);
-                  if (!a || !b || (!onA && !onB)) return null;
-                  return <Line key={`${s.neuron_a}-${s.neuron_b}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={colors.text} strokeOpacity={onA && onB ? 0.3 : 0.08} strokeWidth={0.8} />;
-                })}
-                {t.neurons.map((n) => {
-                  const p = pos[n.code];
-                  if (!p) return null;
-                  const st = t.states[n.code];
-                  const c = colorOf(n.hemisphere);
-                  return (
-                    <G key={n.code}>
-                      {sheet === n.code ? <Circle cx={p.x} cy={p.y} r={10} fill="none" stroke={colors.text} strokeWidth={1.4} /> : null}
-                      {st === 'discovered' ? (
-                        <Circle cx={p.x} cy={p.y} r={6} fill={c} />
-                      ) : st === 'suggested' ? (
-                        <Circle cx={p.x} cy={p.y} r={5.5} fill="none" stroke={c} strokeWidth={1.8} />
-                      ) : (
-                        <Circle cx={p.x} cy={p.y} r={4} fill={colors.muted} fillOpacity={0.35} />
-                      )}
-                      {labels ? (
-                        <SvgText x={p.x} y={p.y + 13} fontSize={5.6} fontFamily={fonts.bold} fill={st ? colors.text : colors.muted} textAnchor="middle">
-                          {n.name}
-                        </SvgText>
-                      ) : null}
-                    </G>
-                  );
-                })}
-              </Svg>
+              <LiveBrain neurons={t.neurons} synapses={t.synapses} states={t.states} width={stageW} selected={sheet} labels={labels} />
             </Animated.View>
           </View>
         </GestureDetector>

@@ -1,14 +1,22 @@
 import { useState } from 'react';
-import { Alert, Share } from 'react-native';
+import { Alert, Pressable, Share, TextInput, View } from 'react-native';
 
+import { useEntries, type Entry } from '@/data/entries';
 import { useCv, type CvEntry, type CvKind } from '@/data/modules';
 import { authErrorMessage } from '@/features/account/authErrors';
 import { ModuleHeader } from '@/features/space/ModuleHeader';
 import { AppText, Button, Notice, Screen } from '@/ui';
 import { tap } from '@/ui/haptics';
-import { Chips, DateField, Empty, Field, Kicker, Panel, Row, Sheet } from '@/ui/kit';
+import { useTheme } from '@/theme/ThemeProvider';
+import { fonts, radius } from '@/theme/tokens';
+import { PlusIcon } from '@/ui/icons';
+import { ChipRow, Chips, DateField, Empty, Field, Kicker, Panel, Row, Sheet } from '@/ui/kit';
 
 // CV: trabajos, estudios, cursos, habilidades, idiomas y logros, listo para compartir.
+// 26-10-2026 (usuario): cada trabajo tiene sus funciones, tareas y logros, que se agregan de a uno
+// al tocarlo; así se arma un perfil profesional con cargos, lugares y lo que hiciste en cada uno.
+
+const ITEM_TYPES = ['Función', 'Tarea', 'Logro'];
 
 const KINDS: { value: CvKind; label: string; plural: string }[] = [
   { value: 'job', label: 'Trabajo', plural: 'Experiencia' },
@@ -22,7 +30,7 @@ const KINDS: { value: CvKind; label: string; plural: string }[] = [
 const year = (d: string | null) => (d ? d.slice(0, 4) : '');
 const period = (e: CvEntry) => (e.started_on ? `${year(e.started_on)} – ${e.current ? 'hoy' : year(e.ended_on) || '…'}` : '');
 
-function asText(name: string, entries: CvEntry[]) {
+function asText(name: string, entries: CvEntry[], items: Entry[] = []) {
   const lines = [name ? name.toUpperCase() : 'CURRÍCULUM', ''];
   for (const k of KINDS) {
     const list = entries.filter((e) => e.kind === k.value);
@@ -31,6 +39,7 @@ function asText(name: string, entries: CvEntry[]) {
     for (const e of list) {
       lines.push(`• ${e.title}${e.organization ? ` — ${e.organization}` : ''}${period(e) ? ` (${period(e)})` : ''}`);
       if (e.description) lines.push(`  ${e.description}`);
+      for (const it of items.filter((x) => x.data.cv_id === e.id)) lines.push(`  – ${it.data.tipo === 'Logro' ? 'Logro: ' : ''}${it.title}`);
     }
     lines.push('');
   }
@@ -39,14 +48,17 @@ function asText(name: string, entries: CvEntry[]) {
 
 export default function CvScreen() {
   const cv = useCv();
+  const extras = useEntries('cv');
+  const items = extras.of('funcion');
   const [adding, setAdding] = useState(false);
+  const [detail, setDetail] = useState<CvEntry | null>(null);
   const groups = KINDS.map((k) => ({ ...k, list: cv.entries.filter((e) => e.kind === k.value) })).filter((g) => g.list.length);
 
   return (
     <Screen>
       <ModuleHeader kicker="Personal" title="CV" />
       <Button label="+ Agregar" onPress={() => setAdding(true)} />
-      {cv.entries.length ? <Button label="Compartir como texto" kind="secondary" onPress={() => Share.share({ message: asText('', cv.entries) })} /> : null}
+      {cv.entries.length ? <Button label="Compartir como texto" kind="secondary" onPress={() => Share.share({ message: asText('', cv.entries, items) })} /> : null}
       {groups.length ? (
         groups.map((g) => (
           <Panel key={g.value}>
@@ -55,7 +67,8 @@ export default function CvScreen() {
               <Row
                 key={e.id}
                 title={e.title}
-                sub={[e.organization, period(e), e.description].filter(Boolean).join(' · ') || undefined}
+                sub={[e.organization, period(e), e.kind === 'job' ? `${items.filter((x) => x.data.cv_id === e.id).length} funciones y logros · toca para agregar` : e.description].filter(Boolean).join(' · ') || undefined}
+                onPress={e.kind === 'job' ? () => setDetail(e) : undefined}
                 onLongPress={() =>
                   Alert.alert('¿Borrar?', `Se borra «${e.title}».`, [
                     { text: 'Cancelar', style: 'cancel' },
@@ -70,6 +83,7 @@ export default function CvScreen() {
         <Empty text="Arma tu CV de a poco: tus trabajos, estudios, cursos e idiomas. Después lo compartes cuando lo necesites." />
       )}
       <AddEntry visible={adding} onClose={() => setAdding(false)} onSave={cv.addEntry} />
+      <JobDetail job={detail} items={items.filter((x) => x.data.cv_id === detail?.id)} onAdd={(tipo, title) => extras.add({ kind: 'funcion', title, data: { cv_id: detail?.id, tipo } })} onRemove={(id) => extras.remove(id)} onClose={() => setDetail(null)} />
     </Screen>
   );
 }
@@ -129,6 +143,65 @@ function AddEntry({ visible, onClose, onSave }: { visible: boolean; onClose: () 
       />
       <AppText variant="caption" muted>
         Mantén presionado un elemento para borrarlo.
+      </AppText>
+    </Sheet>
+  );
+}
+
+/** Las funciones, tareas y logros de un trabajo, que se suman de a uno. */
+function JobDetail({ job, items, onAdd, onRemove, onClose }: { job: CvEntry | null; items: Entry[]; onAdd: (tipo: string, title: string) => Promise<unknown>; onRemove: (id: string) => void; onClose: () => void }) {
+  const { colors } = useTheme();
+  const [tipo, setTipo] = useState('Función');
+  const [draft, setDraft] = useState('');
+  const add = async () => {
+    if (!draft.trim()) return;
+    tap();
+    const text = draft.trim();
+    setDraft('');
+    await onAdd(tipo, text);
+  };
+  return (
+    <Sheet visible={!!job} title={job ? `${job.title}${job.organization ? ` · ${job.organization}` : ''}` : ''} onClose={onClose}>
+      {ITEM_TYPES.map((t) => {
+        const list = items.filter((x) => (x.data.tipo ?? 'Función') === t);
+        return list.length ? (
+          <View key={t} style={{ gap: 4 }}>
+            <Kicker>{t === 'Función' ? 'Funciones' : t === 'Tarea' ? 'Tareas' : 'Logros'}</Kicker>
+            {list.map((x) => (
+              <AppText
+                key={x.id}
+                style={{ fontSize: 15 }}
+                onLongPress={() =>
+                  Alert.alert('¿Borrar?', x.title ?? '', [
+                    { text: 'Cancelar', style: 'cancel' },
+                    { text: 'Borrar', style: 'destructive', onPress: () => onRemove(x.id) },
+                  ])
+                }
+              >
+                {`• ${x.title}`}
+              </AppText>
+            ))}
+          </View>
+        ) : null;
+      })}
+      {!items.length ? <Empty text="Agrega lo que hacías en este trabajo y lo que lograste." /> : null}
+      <ChipRow options={ITEM_TYPES.map((t) => ({ value: t, label: t }))} value={tipo} onChange={setTipo} />
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: radius.md, paddingHorizontal: 12, backgroundColor: colors.surface2 }}>
+        <TextInput
+          value={draft}
+          onChangeText={setDraft}
+          placeholder={tipo === 'Logro' ? 'Aumenté las ventas en un 20 %' : 'Atención de clientes, cuadratura de caja…'}
+          placeholderTextColor={colors.muted}
+          onSubmitEditing={add}
+          returnKeyType="done"
+          style={{ flex: 1, color: colors.text, fontFamily: fonts.medium, fontSize: 15, paddingVertical: 12 }}
+        />
+        <Pressable accessibilityRole="button" accessibilityLabel="Agregar" onPress={add} hitSlop={8}>
+          <PlusIcon size={20} color={draft.trim() ? colors.accent : colors.muted} />
+        </Pressable>
+      </View>
+      <AppText variant="caption" muted>
+        Mantén presionado un elemento para borrarlo. Todo sale en el CV al compartirlo.
       </AppText>
     </Sheet>
   );

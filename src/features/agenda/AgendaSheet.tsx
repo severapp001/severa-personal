@@ -5,7 +5,7 @@ import { hhmm, LAYERS, parseTime, REMINDERS, REPEATS, type CalendarEvent, type E
 import type { Agenda } from '@/data/agenda';
 import { AppText, Button, Checkbox, Notice } from '@/ui';
 import { tap } from '@/ui/haptics';
-import { Chips, DateField, Field, Segmented, Sheet } from '@/ui/kit';
+import { ChipRow, DateField, Field, normalizeTime, Segmented, Sheet, TimeField } from '@/ui/kit';
 
 // Crear o editar un evento del calendario o una tarea (F05, MD4). Con hora, el evento va a la
 // línea del día; sin hora, es de todo el día. La tarea con fecha aparece en las prioridades.
@@ -37,14 +37,16 @@ function AgendaForm({ agenda, target, day, onClose }: { agenda: Agenda; target: 
   const [place, setPlace] = useState(e?.location ?? '');
   const [notes, setNotes] = useState(editing?.notes ?? '');
   const [urgent, setUrgent] = useState(!!t?.urgent);
+  const [importance, setImportance] = useState(String(e?.importance ?? 0));
+  const [until, setUntil] = useState<string | null>(e?.repeat_until ? String(e.repeat_until).slice(0, 10) : null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function save() {
     const name = title.trim();
     if (!name) return setError('Escribe un título.');
-    const startsAt = start.trim() ? parseTime(start) : null;
-    const endsAt = end.trim() ? parseTime(end) : null;
+    const startsAt = start.trim() ? parseTime(normalizeTime(start) || start) : null;
+    const endsAt = end.trim() ? parseTime(normalizeTime(end) || end) : null;
     if (start.trim() && !startsAt) return setError('La hora de inicio no se entiende. Escríbela como 09:30.');
     if (end.trim() && (!endsAt || !startsAt || endsAt <= startsAt)) return setError('La hora de término debe ser después del inicio.');
     if (kind === 'event' && !date) return setError('Elige la fecha.');
@@ -62,6 +64,8 @@ function AgendaForm({ agenda, target, day, onClose }: { agenda: Agenda; target: 
           remind_minutes: remind === 'none' ? null : Number(remind),
           location: place.trim() || null,
           notes: notes.trim() || null,
+          importance: Number(importance),
+          repeat_until: repeat === 'none' ? null : until,
         };
         if (e) await agenda.updateEvent(e.id, values);
         else await agenda.addEvent(values);
@@ -108,30 +112,38 @@ function AgendaForm({ agenda, target, day, onClose }: { agenda: Agenda; target: 
       )}
       <Field label={kind === 'event' ? 'Qué' : 'Qué tienes que hacer'} value={title} onChangeText={setTitle} placeholder={kind === 'event' ? 'Dentista, reunión, cumpleaños…' : 'Pagar la luz'} />
       <DateField label={kind === 'event' ? 'Fecha' : 'Para cuándo (vacío = sin fecha)'} value={date} onChange={setDate} future />
+      {/* Horas que se arman solas: 1200 → 12:00 (usuario, 26-10-2026). */}
       <View style={{ flexDirection: 'row', gap: 8 }}>
-        <View style={{ flex: 1 }}>
-          <Field label={kind === 'event' ? 'Desde (vacío = todo el día)' : 'Hora (opcional)'} value={start} onChangeText={setStart} placeholder="09:30" keyboardType="number-pad" />
-        </View>
-        {kind === 'event' ? (
-          <View style={{ flex: 1 }}>
-            <Field label="Hasta" value={end} onChangeText={setEnd} placeholder="10:30" keyboardType="number-pad" />
-          </View>
-        ) : null}
+        <TimeField label={kind === 'event' ? 'Desde (vacío = todo el día)' : 'Hora (opcional)'} value={start} onChange={setStart} />
+        {kind === 'event' ? <TimeField label="Hasta" value={end} onChange={setEnd} placeholder="10:30" /> : null}
       </View>
       {kind === 'event' ? (
         <>
           <AppText variant="caption" muted>
+            ¿Qué tan importante es?
+          </AppText>
+          <ChipRow
+            options={[
+              { value: '0', label: 'Normal' },
+              { value: '1', label: '★ Prioridad del día' },
+              { value: '2', label: '‼ Urgente' },
+            ]}
+            value={importance}
+            onChange={setImportance}
+          />
+          <AppText variant="caption" muted>
             Tipo
           </AppText>
-          <Chips options={LAYERS} value={layer} onChange={setLayer} />
+          <ChipRow options={LAYERS} value={layer} onChange={setLayer} />
           <AppText variant="caption" muted>
             Repetir
           </AppText>
-          <Chips options={REPEATS} value={repeat} onChange={setRepeat} />
+          <ChipRow options={REPEATS} value={repeat} onChange={setRepeat} />
+          {repeat !== 'none' ? <DateField label="Hasta cuándo (vacío = siempre)" value={until} onChange={setUntil} future /> : null}
           <AppText variant="caption" muted>
-            Aviso (los avisos en el teléfono llegan con la próxima versión de la app)
+            Aviso en el teléfono
           </AppText>
-          <Chips options={REMINDERS.map((r) => ({ value: r.value === null ? 'none' : String(r.value), label: r.label }))} value={remind} onChange={setRemind} />
+          <ChipRow options={REMINDERS.map((r) => ({ value: r.value === null ? 'none' : String(r.value), label: r.label }))} value={remind} onChange={setRemind} />
           <Field label="Lugar (opcional)" value={place} onChangeText={setPlace} />
         </>
       ) : (
