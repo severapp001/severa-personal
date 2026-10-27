@@ -24,7 +24,7 @@ export function useLifeStats(today: string) {
   const finance = useFinance();
   const bible = useBibleNotes();
   const agenda = useAgenda(plusDays(today, -6), today);
-  const entries = useEntries([...Object.keys(MODULES), 'diario', 'biblia', 'juegos', 'trabajo']);
+  const entries = useEntries([...Object.keys(MODULES), 'diario', 'biblia', 'juegos', 'trabajo', 'respiracion', 'meditacion', 'hoy', 'cuerpo_mente_alma', 'zen']);
 
   // Hábitos: días en que se cumplió al menos uno de los buenos, y cumplimiento de los últimos 7.
   const goodIds = new Set(habits.good.map((h) => h.id));
@@ -67,6 +67,7 @@ export function useLifeStats(today: string) {
 
   return {
     habits,
+    logs,
     habitDays,
     habitStreak: streak(habitDays, today),
     habitWeek,

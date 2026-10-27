@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { formatCLP } from '@/core/money';
-import { bmi, dailyCalories, daysBetween, expiry, predictCycle, settle, sharedBalances, weekMinutes, type SharedExpense, type SharedPayment } from '@/core/modules';
+import { bmi, dailyCalories, daysBetween, expiry, plusDays, predictCycle, settle, sharedBalances, weekMinutes, type SharedExpense, type SharedPayment } from '@/core/modules';
 import type { Entries, Entry } from '@/data/entries';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fonts } from '@/theme/tokens';
@@ -22,6 +22,8 @@ export type WidgetProps = {
   money: (n: number) => string;
   onAdd: (kind: string) => void;
   onOpen: (e: Entry) => void;
+  /** La respuesta a la pregunta inicial del módulo (Íntimo y ciclo: quién lo usa). */
+  answer?: string | null;
 };
 
 const fmt = (day: string | null) => (day ? `${day.slice(8, 10)}-${day.slice(5, 7)}` : '');
@@ -29,6 +31,12 @@ const DOW = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
 
 export function ModuleWidget(p: WidgetProps) {
   switch (p.def.widget) {
+    case 'goals':
+      return <Goals {...p} />;
+    case 'routine':
+      return <Routine {...p} />;
+    case 'therapy':
+      return <Therapy {...p} />;
     case 'meds':
       return <Meds {...p} />;
     case 'exercise':
@@ -60,6 +68,120 @@ export function ModuleWidget(p: WidgetProps) {
     default:
       return null;
   }
+}
+
+// ─── Tu rutina: los bloques fijos de hoy y de mañana (tarjeta de Inicio, 27-10-2026) ─
+const WEEKDAY = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+function Routine({ store, today }: WidgetProps) {
+  const on = (d: string) =>
+    store
+      .of('bloque')
+      .filter((b) => Array.isArray(b.data.dias) && (b.data.dias as string[]).includes(WEEKDAY[new Date(`${d}T12:00:00`).getDay()]))
+      .sort((a, b) => String(a.data.desde ?? '').localeCompare(String(b.data.desde ?? '')));
+  const line = (b: Entry) => `${b.data.desde ? `${b.data.desde}${b.data.hasta ? `–${b.data.hasta}` : ''} · ` : ''}${b.title}`;
+  const days: [string, Entry[]][] = [
+    ['Hoy', on(today)],
+    ['Mañana', on(plusDays(today, 1))],
+  ];
+  return (
+    <Panel>
+      {days.map(([label, list]) => (
+        <View key={label} style={{ gap: 4 }}>
+          <Kicker>{label}</Kicker>
+          {list.length ? (
+            list.map((b) => (
+              <AppText key={b.id} variant="label" style={{ fontSize: 15 }}>
+                {line(b)}
+              </AppText>
+            ))
+          ) : (
+            <AppText variant="caption" muted>
+              Sin bloques fijos.
+            </AppText>
+          )}
+        </View>
+      ))}
+    </Panel>
+  );
+}
+
+// ─── Metas y desafíos: avance, racha del desafío y lo que Severa sabe que ayuda ─
+const HELPS: Record<string, string[]> = {
+  Cuerpo: ['Ejercicio: anota cada sesión y mira tu semana frente a los 150 minutos.', 'Hábitos: cuenta agua, sueño o caminar para ver tu constancia.', 'Alimentación: anota tus comidas y tu peso.'],
+  Mente: ['Diario: cierra el día y mira qué se repite en tus días buenos.', 'Estudios: tus ramos y pruebas con la nota que necesitas.', 'Hábitos: leer o estudiar unos minutos cada día.'],
+  Alma: ['Biblia: el Pan de vida de cada día y tu racha.', 'Gratitud: una cosa buena del día.', 'Hábitos: orar o meditar, y FODA para conocerte.'],
+};
+function Goals({ store, today, parent, onAdd }: WidgetProps) {
+  const { colors } = useTheme();
+  if (!parent) {
+    const open = store.of('meta').filter((g) => !g.done);
+    if (!open.length) return null;
+    return (
+      <Panel>
+        <Kicker>{`${open.length} en curso`}</Kicker>
+        {open.slice(0, 4).map((g) => {
+          const steps = store.of('paso', g.id);
+          const pct = steps.length ? steps.filter((x) => x.done).length / steps.length : 0;
+          return <BarRow key={g.id} label={`${g.title} · ${String(g.data.parte ?? '')}`} value={pct} max={1} text={`${Math.round(pct * 100)} %`} tone="ok" />;
+        })}
+      </Panel>
+    );
+  }
+  const steps = store.of('paso', parent.id);
+  const logs = store.of('avance', parent.id);
+  const challenge = /(\d+) días/.exec(String(parent.data.tipo ?? ''));
+  const goal = challenge ? Number(challenge[1]) : 0;
+  const daysDone = new Set(logs.map((l) => l.day)).size;
+  const left = parent.until ? daysBetween(today, parent.until) : null;
+  return (
+    <Panel>
+      <Kicker>{[parent.data.parte, parent.data.tipo, left !== null ? (left >= 0 ? `quedan ${left} días` : 'plazo cumplido') : null].filter(Boolean).join(' · ')}</Kicker>
+      {parent.body ? <AppText style={{ fontSize: 15 }}>{`«${parent.body}»`}</AppText> : null}
+      {goal ? <BarRow label="Desafío" value={daysDone} max={goal} text={`${daysDone} de ${goal} días`} tone="ok" /> : null}
+      {steps.length ? <BarRow label="Pasos" value={steps.filter((x) => x.done).length} max={steps.length} text={`${steps.filter((x) => x.done).length} de ${steps.length}`} /> : null}
+      <Kicker>Lo que Severa sabe que te ayuda</Kicker>
+      {(HELPS[String(parent.data.parte)] ?? HELPS.Cuerpo).map((t) => (
+        <AppText key={t} variant="caption">{`• ${t}`}</AppText>
+      ))}
+      {goal ? <Button label="Hoy cumplí" kind="secondary" onPress={() => onAdd('avance')} /> : null}
+      {goal && daysDone >= goal ? (
+        <AppText variant="label" color={colors.ok}>
+          ¡Desafío cumplido! Márcalo como logrado.
+        </AppText>
+      ) : null}
+    </Panel>
+  );
+}
+
+// ─── Terapia: qué necesitas ahora y a quién llamar ───────────────────────────
+const NEEDS: [string, string][] = [
+  ['pensamiento', 'Me siento mal por algo'],
+  ['decision', 'Tengo que decidir'],
+  ['ahora', 'Perdí el foco'],
+  ['opuesto', 'Tengo una idea negativa'],
+];
+function Therapy({ store, onAdd }: WidgetProps) {
+  const { colors } = useTheme();
+  const thoughts = store.of('pensamiento').filter((t) => t.value && t.data.despues);
+  const relief = thoughts.length ? thoughts.reduce((s, t) => s + (Number(t.value) - Number(t.data.despues)), 0) / thoughts.length : null;
+  return (
+    <Panel>
+      <Kicker>¿Qué necesitas ahora?</Kicker>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+        {NEEDS.map(([k, l]) => (
+          <Pressable key={k} accessibilityRole="button" onPress={() => onAdd(k)} style={[styles.chip, { backgroundColor: colors.surface2 }]}>
+            <AppText variant="label" style={{ fontSize: 13 }}>
+              {l}
+            </AppText>
+          </Pressable>
+        ))}
+      </View>
+      {relief !== null ? <AppText variant="caption" muted>{`Después de escribir, la intensidad baja en promedio ${relief.toFixed(1).replace('.', ',')} puntos.`}</AppText> : null}
+      <AppText variant="caption" color={colors.bad}>
+        ¿En crisis? Llama al *4141 (prevención del suicidio, gratis, 24 horas) o al 131 (SAMU).
+      </AppText>
+    </Panel>
+  );
 }
 
 // ─── Salud: los remedios de hoy, con una casilla por toma ────────────────────
@@ -402,11 +524,37 @@ function Swot({ store, onOpen }: WidgetProps) {
 }
 
 // ─── Íntimo y ciclo: el próximo período ──────────────────────────────────────
-function Cycle({ store, today, onAdd }: WidgetProps) {
+// Cómo acompañar a la pareja en cada fase: sugerencias generales, sin suponer cómo se siente ella.
+const PARTNER_TIPS: Record<string, string[]> = {
+  menstrual: ['Pregúntale cómo se siente y qué necesita; no minimices el dolor.', 'Ofrece calor, una infusión o que descanse; toma tú más tareas de la casa.'],
+  folicular: ['Muchas personas sienten más energía en estos días: buen momento para planes juntos.'],
+  ovulacion: ['Es la ventana fértil estimada. Si buscan o evitan un embarazo, no usen esto como método.'],
+  lutea: ['Puede haber cansancio, hinchazón o cambios de ánimo. Más paciencia, menos carga; pregunta en vez de suponer.'],
+};
+function Cycle({ store, today, onAdd, answer }: WidgetProps) {
   const { colors } = useTheme();
   const p = predictCycle(store.of('periodo').map((x) => x.day).filter((d): d is string => !!d), today);
+  if (answer === 'Soy hombre') return null;
   if (!p) return null;
+  const partner = answer === 'Soy hombre y quiero acompañar el ciclo de mi pareja';
   const fertile = today >= p.fertileFrom && today <= p.fertileTo;
+  const phase = p.dayOfCycle <= 5 ? 'menstrual' : fertile ? 'ovulacion' : today < p.fertileFrom ? 'folicular' : 'lutea';
+  if (partner) {
+    return (
+      <Panel>
+        <Kicker>{`Su ciclo: día ${p.dayOfCycle} · promedio ${p.average} días`}</Kicker>
+        <AppText variant="title">{p.daysToNext === 0 ? 'Su período podría llegar hoy' : `Su próximo período, en ${p.daysToNext} ${p.daysToNext === 1 ? 'día' : 'días'}`}</AppText>
+        <Kicker color={colors.accent}>Cómo acompañarla ahora</Kicker>
+        {PARTNER_TIPS[phase].map((tip) => (
+          <AppText key={tip} variant="body" style={{ fontSize: 15 }}>{`• ${tip}`}</AppText>
+        ))}
+        <AppText variant="caption" muted>
+          Cada persona vive su ciclo distinto: lo mejor es conversarlo con ella.
+        </AppText>
+        <Button label="Le llegó el período" kind="secondary" onPress={() => onAdd('periodo')} />
+      </Panel>
+    );
+  }
   return (
     <Panel>
       <Kicker>{`Día ${p.dayOfCycle} de tu ciclo · promedio ${p.average} días`}</Kicker>
@@ -567,4 +715,5 @@ const styles = StyleSheet.create({
   quads: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   quad: { width: '48%', flexGrow: 1, borderRadius: 14, padding: 10, gap: 3, borderLeftWidth: 3, minHeight: 90 },
   shift: { flex: 1, borderRadius: 8, paddingVertical: 6, alignItems: 'center', gap: 2 },
+  chip: { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },
 });

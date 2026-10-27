@@ -41,7 +41,7 @@ export type KindDef = {
   toCalendar?: { layer: 'salud' | 'trabajo' | 'personal' | 'familia' | 'otro'; prefix?: string; timeKey?: string; placeKey?: string };
 };
 
-export type WidgetKey = 'meds' | 'exercise' | 'imc' | 'shopping' | 'expiry' | 'shared' | 'trip' | 'timeline' | 'swot' | 'cycle' | 'cobros' | 'clients' | 'orders' | 'shifts' | 'sales';
+export type WidgetKey = 'goals' | 'therapy' | 'routine' | 'meds' | 'exercise' | 'imc' | 'shopping' | 'expiry' | 'shared' | 'trip' | 'timeline' | 'swot' | 'cycle' | 'cobros' | 'clients' | 'orders' | 'shifts' | 'sales';
 
 export type ModuleDef = {
   code: string;
@@ -57,6 +57,10 @@ export type ModuleDef = {
   widget?: WidgetKey;
   sensitive?: boolean;
   note?: string;
+  /** Una pregunta la primera vez (se guarda como «config») que cambia cómo se ve el módulo. */
+  setup?: { key: string; question: string; options: string[] };
+  /** Orden y nombres de las pestañas según la respuesta a `setup`. */
+  arrange?: (answer: string | null) => { order: string[]; labels?: Record<string, string> };
 };
 
 const peopleOf = (parent: Entry | null) =>
@@ -442,6 +446,15 @@ export const MODULES: Record<string, ModuleDef> = {
     widget: 'cycle',
     sensitive: true,
     note: 'La predicción es una estimación con tus registros; no sirve como método anticonceptivo.',
+    // 26-10-2026 (usuario): si es mujer, primero su ciclo; si es hombre, primero el registro íntimo,
+    // y puede llevar el ciclo de su pareja para acompañarla.
+    setup: { key: 'uso', question: '¿Cómo quieres usar este módulo?', options: ['Soy mujer: mi ciclo', 'Soy hombre', 'Soy hombre y quiero acompañar el ciclo de mi pareja'] },
+    arrange: (a) =>
+      a === 'Soy hombre'
+        ? { order: ['intimo'] }
+        : a === 'Soy hombre y quiero acompañar el ciclo de mi pareja'
+          ? { order: ['intimo', 'periodo', 'sintoma_ciclo'], labels: { periodo: 'Ciclo de tu pareja', sintoma_ciclo: 'Cómo se siente ella' } }
+          : { order: ['periodo', 'sintoma_ciclo', 'intimo'] },
     kinds: [
       {
         kind: 'periodo',
@@ -486,6 +499,7 @@ export const MODULES: Record<string, ModuleDef> = {
     intro: 'Los bloques fijos de tu semana (gimnasio, clases, llevar a los niños): Severa arma tu día con ellos.',
     minimum: 'Un bloque con sus días y horas.',
     connects: 'Hoy (línea del día), Calendario y el cruce a Trabajo.',
+    widget: 'routine',
     kinds: [
       {
         kind: 'bloque',
@@ -497,6 +511,126 @@ export const MODULES: Record<string, ModuleDef> = {
           { key: 'dias', label: 'Días', kind: 'multi', required: true, options: ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'] },
           { key: 'desde', label: 'Desde', kind: 'time' },
           { key: 'hasta', label: 'Hasta', kind: 'time' },
+        ],
+      },
+    ],
+  },
+
+  metas: {
+    code: 'metas',
+    title: 'Metas y desafíos',
+    space: 'Personal',
+    intro: 'Una meta o un desafío para tu cuerpo, tu mente o tu alma, con sus pasos. Severa junta lo que sabe de ti para ayudarte a cumplirlo.',
+    minimum: 'Una meta, con la parte a la que apunta.',
+    connects: 'Cuerpo, mente y alma; Hábitos, Ejercicio, Alimentación, Diario, Biblia y Finanzas.',
+    widget: 'goals',
+    kinds: [
+      {
+        kind: 'meta',
+        label: 'Metas',
+        one: 'Meta',
+        checkable: 'Lograda',
+        empty: 'Por ejemplo: caminar 30 días seguidos, leer el Nuevo Testamento, dormir antes de las 23:00.',
+        fields: [
+          { key: 'title', label: '¿Qué quieres lograr?', kind: 'text', required: true, placeholder: 'Correr 5 km sin parar' },
+          { key: 'parte', label: '¿A qué parte apunta?', kind: 'choice', required: true, options: ['Cuerpo', 'Mente', 'Alma'], initial: 'Cuerpo' },
+          { key: 'tipo', label: '¿Es una meta o un desafío?', kind: 'choice', options: ['Meta', 'Desafío de 21 días', 'Desafío de 30 días'], initial: 'Meta' },
+          { key: 'day', label: 'Empiezo', kind: 'date', initial: 'today' },
+          { key: 'until', label: 'Para cuándo (opcional)', kind: 'date' },
+          { key: 'body', label: '¿Para qué? ¿Quién quieres ser? (opcional)', kind: 'long', placeholder: 'Lo que cambia en ti cuando lo logres' },
+        ],
+      },
+      {
+        kind: 'paso',
+        parent: 'meta',
+        label: 'Pasos',
+        one: 'Paso',
+        checkable: 'Hecho',
+        empty: 'Divide la meta en pasos chicos.',
+        fields: [
+          { key: 'title', label: 'Paso', kind: 'text', required: true },
+          { key: 'day', label: 'Para cuándo (opcional)', kind: 'date' },
+        ],
+      },
+      {
+        kind: 'avance',
+        parent: 'meta',
+        label: 'Bitácora',
+        one: 'Avance',
+        empty: 'Anota cómo vas: los días que cumples cuentan para el desafío.',
+        fields: [
+          { key: 'day', label: 'Día', kind: 'date', initial: 'today' },
+          { key: 'body', label: '¿Cómo te fue? (opcional)', kind: 'long' },
+        ],
+      },
+    ],
+  },
+
+  terapia: {
+    code: 'terapia',
+    title: 'Terapia',
+    space: 'Personal',
+    intro: 'Ejercicios de terapia cognitivo-conductual para ordenar la cabeza: pros y contras de una decisión, registro de pensamientos, pensar lo contrario y «¿qué estoy haciendo?», que ayuda mucho con el TDAH.',
+    minimum: 'Un ejercicio.',
+    connects: 'Diario (ánimo), Metas, Hábitos y Cuerpo, mente y alma.',
+    widget: 'therapy',
+    sensitive: true,
+    note: 'Son ejercicios de autoayuda: no reemplazan a un psicólogo o psiquiatra. Si estás en crisis, llama al *4141 (línea de prevención del suicidio, gratis) o al 131 (SAMU).',
+    kinds: [
+      {
+        kind: 'pensamiento',
+        label: 'Registro de pensamientos',
+        one: 'Pensamiento',
+        empty: 'Cuando algo te mueve fuerte, anótalo: la situación, lo que pensaste y lo que sentiste. Después busca la evidencia.',
+        fields: [
+          { key: 'title', label: '¿Qué pasó? (la situación)', kind: 'text', required: true, placeholder: 'Mi jefe no me respondió el mensaje' },
+          { key: 'pensamiento', label: '¿Qué pensaste en ese momento?', kind: 'long', required: true, placeholder: 'Está molesto conmigo, hice algo mal' },
+          { key: 'emocion', label: '¿Qué sentiste?', kind: 'choice', options: ['Ansiedad', 'Tristeza', 'Rabia', 'Culpa', 'Vergüenza', 'Miedo', 'Frustración', 'Otra'] },
+          { key: 'value', label: '¿Qué tan fuerte? (1 a 10)', kind: 'scale', max: 10 },
+          { key: 'favor', label: 'Evidencia a favor de ese pensamiento', kind: 'long' },
+          { key: 'contra', label: 'Evidencia en contra', kind: 'long', placeholder: 'Está en reuniones toda la mañana…' },
+          { key: 'body', label: 'Un pensamiento más equilibrado', kind: 'long', placeholder: 'Probablemente está ocupado; le pregunto en la tarde' },
+          { key: 'despues', label: '¿Qué tan fuerte ahora? (1 a 10)', kind: 'scale', max: 10 },
+          { key: 'day', label: 'Día', kind: 'date', initial: 'today' },
+        ],
+      },
+      {
+        kind: 'decision',
+        label: 'Pros y contras',
+        one: 'Decisión',
+        empty: 'Para decidir con calma: lo bueno y lo malo de cada camino, escrito.',
+        fields: [
+          { key: 'title', label: '¿Qué tienes que decidir?', kind: 'text', required: true, placeholder: 'Cambiarme de trabajo' },
+          { key: 'pros', label: 'Lo bueno de hacerlo', kind: 'long' },
+          { key: 'contras', label: 'Lo malo de hacerlo', kind: 'long' },
+          { key: 'pros_no', label: 'Lo bueno de no hacerlo', kind: 'long' },
+          { key: 'contras_no', label: 'Lo malo de no hacerlo', kind: 'long' },
+          { key: 'body', label: '¿Qué decides? (opcional)', kind: 'long' },
+          { key: 'day', label: 'Día', kind: 'date', initial: 'today' },
+        ],
+      },
+      {
+        kind: 'opuesto',
+        label: 'Pensar lo contrario',
+        one: 'Ejercicio',
+        empty: 'Escribe lo que piensas y después lo contrario, como si fuera cierto: ayuda a salir del piloto automático.',
+        fields: [
+          { key: 'title', label: 'Lo que pienso', kind: 'text', required: true, placeholder: 'Nunca termino lo que empiezo' },
+          { key: 'contrario', label: 'Lo contrario', kind: 'long', required: true, placeholder: 'Termino cosas cuando las divido en pasos chicos' },
+          { key: 'body', label: '¿Qué haría distinto si creyera lo contrario?', kind: 'long' },
+          { key: 'day', label: 'Día', kind: 'date', initial: 'today' },
+        ],
+      },
+      {
+        kind: 'ahora',
+        label: '¿Qué estoy haciendo?',
+        one: 'Chequeo',
+        empty: 'Para el TDAH: para un segundo y anota qué estás haciendo y qué querías hacer. Te ayuda a volver al foco.',
+        fields: [
+          { key: 'title', label: '¿Qué estoy haciendo ahora?', kind: 'text', required: true, placeholder: 'Mirando el celular' },
+          { key: 'queria', label: '¿Qué quería o debía estar haciendo?', kind: 'text', placeholder: 'Estudiar para la prueba' },
+          { key: 'paso', label: '¿Cuál es el paso más chico para volver?', kind: 'text', placeholder: 'Abrir el cuaderno 10 minutos' },
+          { key: 'day', label: 'Día', kind: 'date', initial: 'today' },
         ],
       },
     ],

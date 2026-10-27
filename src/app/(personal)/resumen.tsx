@@ -10,6 +10,7 @@ import { MODULES } from '@/features/modules/catalog';
 import { useAmountVisibility } from '@/features/privacy/useAmountVisibility';
 import { ModuleHeader } from '@/features/space/ModuleHeader';
 import { moduleHref } from '@/features/space/moduleRoutes';
+import { ThreeParts } from '@/features/stats/ThreeParts';
 import { useLifeStats, type LifeStats } from '@/features/stats/useLifeStats';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fonts } from '@/theme/tokens';
@@ -90,6 +91,8 @@ export default function ResumenScreen() {
           </Pressable>
         ))}
       </View>
+
+      <ThreeParts stats={s} today={today} compact />
 
       <Panel>
         <Kicker>Consejos para esta semana</Kicker>

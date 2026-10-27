@@ -39,7 +39,10 @@ export function ModuleBody({ def, nuevo }: { def: ModuleDef; nuevo?: string }) {
   const habits = useHabits(today);
   const finance = useFinance();
 
-  const top = def.kinds.filter((k) => !k.parent);
+  const config = store.of('config')[0] ?? null;
+  const answer = def.setup ? ((config?.data[def.setup.key] as string | undefined) ?? null) : null;
+  const arranged = def.arrange?.(answer);
+  const top = (arranged ? arranged.order.map((k) => def.kinds.find((x) => x.kind === k)!).filter(Boolean) : def.kinds.filter((k) => !k.parent)).map((k) => (arranged?.labels?.[k.kind] ? { ...k, label: arranged.labels[k.kind] } : k));
   const [tab, setTab] = useState(top[0].kind);
   const [openId, setOpenId] = useState<string | null>(null);
   const [childTab, setChildTab] = useState<string | null>(null);
@@ -177,6 +180,7 @@ export function ModuleBody({ def, nuevo }: { def: ModuleDef; nuevo?: string }) {
         money={$}
         onAdd={(kind) => setSheet({ kind: kindOf(kind), parent: p })}
         onOpen={(e) => setSheet({ kind: kindOf(e.kind), entry: e, parent: p })}
+        answer={answer}
       />
     ) : null;
 
@@ -220,6 +224,31 @@ export function ModuleBody({ def, nuevo }: { def: ModuleDef; nuevo?: string }) {
     <Screen>
       <ModuleHeader kicker={def.space} title={def.title} right={showMoney ? <EyeButton visible={money.visible} onPress={money.toggle} /> : undefined} />
       {def.sensitive ? <Notice tone="mid" text="Datos sensibles: se guardan cifrados en tu teléfono y solo tú los ves." /> : null}
+      {def.setup ? (
+        <Panel>
+          <Kicker>{def.setup.question}</Kicker>
+          <View style={{ gap: 6 }}>
+            {def.setup.options.map((o) => (
+              <Pressable
+                key={o}
+                accessibilityRole="radio"
+                accessibilityState={{ checked: answer === o }}
+                onPress={() => {
+                  tap();
+                  if (config) store.update(config.id, { data: { ...config.data, [def.setup!.key]: o } });
+                  else store.add({ kind: 'config', data: { [def.setup!.key]: o } });
+                  setTab(def.arrange?.(o).order[0] ?? tab);
+                }}
+                style={[styles.setup, { backgroundColor: answer === o ? colors.accentSoft : colors.surface2 }]}
+              >
+                <AppText variant="label" color={answer === o ? colors.accent : colors.text}>
+                  {o}
+                </AppText>
+              </Pressable>
+            ))}
+          </View>
+        </Panel>
+      ) : null}
       {!visible.length ? (
         <Panel>
           <Kicker color={colors.accent}>Para que funcione</Kicker>
@@ -260,4 +289,5 @@ const styles = StyleSheet.create({
   back: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   check: { width: 30, height: 30, borderRadius: 10, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
   listHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  setup: { borderRadius: 14, paddingHorizontal: 14, paddingVertical: 11 },
 });

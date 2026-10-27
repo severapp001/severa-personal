@@ -1,6 +1,6 @@
 import { describe, expect, it } from '@jest/globals';
 
-import { continueFrom, nextChapter, parseReference, previousChapter, progress, verseOfDay, type BibleBook } from '../bible';
+import { continueFrom, nextChapter, PAN_VERSES, parseReference, previousChapter, progress, randomVerse, verseOfDay, type BibleBook } from '../bible';
 
 const books: BibleBook[] = [
   { code: 'GEN', ord: 1, name: 'Génesis', testament: 'AT', chapters: 50 },
@@ -44,5 +44,18 @@ describe('Biblia', () => {
   it('un versículo distinto cada día', () => {
     expect(verseOfDay('2026-01-01')).toEqual({ book: 'PSA', chapter: 23, verse: 1 });
     expect(verseOfDay('2026-01-02')).toEqual({ book: 'JOH', chapter: 3, verse: 16 });
+  });
+});
+
+describe('otro Pan de vida (26-10-2026)', () => {
+  const CODES = 'GEN EXO LEV NUM DEU JOS JDG RUT 1SA 2SA 1KI 2KI 1CH 2CH EZR NEH EST JOB PSA PRO ECC SOL ISA JER LAM EZE DAN HOS JOE AMO OBA JON MIC NAH HAB ZEP HAG ZEC MAL MAT MAR LUK JOH ACT ROM 1CO 2CO GAL EPH PHI COL 1TH 2TH 1TI 2TI TIT PHM HEB JAM 1PE 2PE 1JO 2JO 3JO JUD REV'.split(' ');
+
+  it('todos los versículos usan libros que existen', () => {
+    expect(PAN_VERSES.filter((v) => !CODES.includes(v.book))).toEqual([]);
+  });
+
+  it('no repite los ya mostrados', () => {
+    const seen = PAN_VERSES.slice(1).map((v) => `${v.book} ${v.chapter}:${v.verse}`);
+    expect(randomVerse(seen, () => 0.5)).toEqual(PAN_VERSES[0]);
   });
 });

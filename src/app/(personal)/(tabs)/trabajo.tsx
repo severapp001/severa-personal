@@ -1,24 +1,27 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, View } from 'react-native';
 
 import { addDays, eventsOn, hhmm, shortDay, weekday } from '@/core/agenda';
+import { NO_WORK, STUDY } from '@/core/discovery';
 import { displayAmount } from '@/core/money';
 import { dayKey } from '@/core/today';
 import { useAgenda } from '@/data/agenda';
+import { setOnboardingTrades, useOnboarding, useTrades } from '@/data/discovery';
 import type { Entry } from '@/data/entries';
+import { useAuth } from '@/data/auth';
 import { EntrySheet, type SheetTarget } from '@/features/modules/EntrySheet';
 import { useAmountVisibility } from '@/features/privacy/useAmountVisibility';
 import { moduleHref } from '@/features/space/moduleRoutes';
 import { useCross } from '@/features/space/SpaceCross';
 import { JornadaCard, useWork } from '@/features/today/WorkToday';
 import { useToday } from '@/features/today/useToday';
-import { activeJobs, DAYS, JOB_KIND, tramoEarnings, useNowSec, worksOn } from '@/features/work/jobs';
+import { activeJobs, JOB_KIND, tramoEarnings, useNowSec, worksOn } from '@/features/work/jobs';
+import { PlanSheet } from '@/features/work/PlanSheet';
 import { useTheme } from '@/theme/ThemeProvider';
-import { fonts } from '@/theme/tokens';
-import { AppText, Button, EyeButton, Notice, Screen } from '@/ui';
+import { AppText, Button, EyeButton, Screen } from '@/ui';
 import { tap } from '@/ui/haptics';
-import { ChipRow, DateField, Empty, Kicker, Panel, Row, Sheet, TimeField, normalizeTime } from '@/ui/kit';
+import { Empty, Kicker, Panel, Row } from '@/ui/kit';
 
 // Trabajo en la barra de abajo (usuario, 26-10-2026): tus trabajos (uno fijo y otros por unos días),
 // la jornada por tramos, la semana planificada en el calendario y cuánto ganas por trabajo y por hora.
@@ -47,7 +50,43 @@ export default function TrabajoScreen() {
   const [sheet, setSheet] = useState<SheetTarget | null>(null);
   const [plan, setPlan] = useState<Entry | null | 'new'>(null);
 
+  const { session } = useAuth();
+  const onboarding = useOnboarding(session?.user.id);
+  const { trades } = useTrades();
+  const myTrades = (onboarding?.trades ?? []).filter((c) => c !== STUDY && c !== NO_WORK);
   const jobs = activeJobs(w.jobs, today);
+  const ended = w.jobs.filter((j) => !jobs.includes(j));
+
+  // Terminar o borrar un trabajo (usuario, 27-10-2026: «no encuentro manera de eliminar el trabajo,
+  // o poner término, como si ya no lo hiciera»). Terminado: deja de salir en la jornada y en la
+  // semana, pero sus horas y ganancias se guardan.
+  const finish = (j: Entry) =>
+    Alert.alert(`¿Ya no trabajas en ${j.title ?? 'este trabajo'}?`, 'Si lo terminas, sus horas y ganancias quedan guardadas. Si lo borras, se va de tus trabajos.', [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Borrar',
+        style: 'destructive',
+        onPress: async () => {
+          if (w.open?.parent_id === j.id) await w.close(w.open);
+          await w.store.remove(j.id);
+        },
+      },
+      {
+        text: 'Ya no lo hago',
+        onPress: async () => {
+          if (w.open?.parent_id === j.id) await w.close(w.open);
+          const yesterday = addDays(today, -1);
+          await w.store.update(j.id, { until: yesterday, day: j.day && j.day > yesterday ? yesterday : j.day });
+        },
+      },
+    ]);
+  const removeTrade = (code: string) => {
+    const name = trades.find((x) => x.code === code)?.name ?? code;
+    Alert.alert(`¿Quitar «${name}»?`, 'Es el oficio que elegiste en Conocerte. Si lo quitas, Severa deja de sugerirlo en tu jornada.', [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: 'Quitar', style: 'destructive', onPress: () => session && setOnboardingTrades(session.user.id, (onboarding?.trades ?? []).filter((c) => c !== code)) },
+    ]);
+  };
   const week = Array.from({ length: 7 }, (_, i) => addDays(today, i));
   const monthKey = today.slice(0, 7);
   const weekFrom = addDays(today, -6);
@@ -96,19 +135,53 @@ export default function TrabajoScreen() {
             + Trabajo
           </AppText>
         </View>
-        {w.jobs.length ? (
-          w.jobs.map((j) => (
+        {jobs.length ? (
+          jobs.map((j) => (
             <Row
               key={j.id}
               title={j.title ?? 'Trabajo'}
               sub={jobSub(j) || 'Toca para completar el pago, los días y el horario'}
               onPress={() => setSheet({ kind: JOB_KIND, entry: j })}
-              right={jobs.includes(j) ? undefined : <AppText variant="caption" muted>Terminado</AppText>}
+              right={
+                <AppText variant="label" color={colors.muted} onPress={() => (tap(), finish(j))} suppressHighlighting>
+                  Terminar
+                </AppText>
+              }
             />
           ))
         ) : (
           <Empty text="Agrega el trabajo de siempre y los de unos días (un reemplazo, una feria): cada uno con su pago, días, horario y contrato." />
         )}
+        {ended.length ? (
+          <>
+            <Kicker>Terminados</Kicker>
+            {ended.map((j) => (
+              <Row
+                key={j.id}
+                title={j.title ?? 'Trabajo'}
+                sub={j.until ? `Hasta el ${shortDay(j.until)}` : 'Terminado'}
+                onPress={() => setSheet({ kind: JOB_KIND, entry: j })}
+                right={
+                  <AppText variant="label" color={colors.accent} onPress={() => (tap(), w.store.update(j.id, { until: null }))} suppressHighlighting>
+                    Reactivar
+                  </AppText>
+                }
+              />
+            ))}
+          </>
+        ) : null}
+        {myTrades.length ? (
+          <>
+            <Kicker>Tu oficio en Conocerte</Kicker>
+            <View style={styles.trades}>
+              {myTrades.map((c) => (
+                <Pressable key={c} accessibilityRole="button" accessibilityLabel={`Quitar ${trades.find((x) => x.code === c)?.name ?? c}`} onPress={() => (tap(), removeTrade(c))} style={[styles.trade, { backgroundColor: colors.surface2 }]}>
+                  <AppText variant="label" style={{ fontSize: 13 }}>{`${trades.find((x) => x.code === c)?.name ?? c}  ✕`}</AppText>
+                </Pressable>
+              ))}
+            </View>
+          </>
+        ) : null}
       </Panel>
 
       <Panel>
@@ -201,77 +274,11 @@ export default function TrabajoScreen() {
   );
 }
 
-/** Planificar un tramo de un trabajo en el calendario (se repite cada semana si quieres). */
-function PlanSheet({ visible, jobs, agenda, day, onClose }: { visible: boolean; jobs: Entry[]; agenda: ReturnType<typeof useAgenda>; day: string; onClose: () => void }) {
-  const [job, setJob] = useState<string | null>(null);
-  const [date, setDate] = useState<string | null>(day);
-  const [from, setFrom] = useState('');
-  const [to, setTo] = useState('');
-  const [repeat, setRepeat] = useState<'none' | 'weekly'>('none');
-  const [until, setUntil] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const chosen = jobs.find((j) => j.id === (job ?? jobs[0]?.id)) ?? null;
-
-  async function save() {
-    const start = normalizeTime(from);
-    const end = normalizeTime(to);
-    if (!chosen) return setError('Primero agrega un trabajo.');
-    if (!date || !start) return setError('Elige el día y la hora de inicio.');
-    if (end && end <= start) return setError('La hora de término debe ser después del inicio.');
-    setBusy(true);
-    setError(null);
-    try {
-      await agenda.addEvent({ title: chosen.title ?? 'Trabajo', event_date: date, starts_at: start, ends_at: end || null, layer: 'trabajo', repeat, repeat_until: repeat === 'weekly' ? until : null, remind_minutes: 30, location: null, notes: null, importance: 1 });
-      tap();
-      setFrom('');
-      setTo('');
-      onClose();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'No se pudo guardar.');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <Sheet visible={visible} title="Planificar un tramo" onClose={onClose}>
-      {jobs.length ? (
-        <>
-          <AppText variant="caption" muted>
-            Trabajo
-          </AppText>
-          <ChipRow options={jobs.map((j) => ({ value: j.id, label: j.title ?? 'Trabajo' }))} value={chosen?.id ?? null} onChange={setJob} />
-          <DateField label="Día" value={date} onChange={setDate} future />
-          <View style={{ flexDirection: 'row', gap: 8 }}>
-            <TimeField label="Desde" value={from} onChange={setFrom} placeholder={String(chosen?.data.desde ?? '07:00')} />
-            <TimeField label="Hasta" value={to} onChange={setTo} placeholder={String(chosen?.data.hasta ?? '13:00')} />
-          </View>
-          <ChipRow
-            options={[
-              { value: 'none', label: 'Solo ese día' },
-              { value: 'weekly', label: `Cada ${date ? WEEK[weekday(date)] : 'semana'}` },
-            ]}
-            value={repeat}
-            onChange={setRepeat}
-          />
-          {repeat === 'weekly' ? <DateField label="Hasta cuándo (vacío = sin fin)" value={until} onChange={setUntil} future /> : null}
-          {error ? <Notice text={error} /> : null}
-          <Button label="Guardar en el calendario" loading={busy} onPress={save} />
-        </>
-      ) : (
-        <AppText muted>Primero agrega un trabajo.</AppText>
-      )}
-      <AppText variant="caption" muted style={{ fontFamily: fonts.medium }}>
-        {`Días de la semana: ${DAYS.join(' ')}. Lo planificado aparece en tu Calendario y en Hoy en Trabajo.`}
-      </AppText>
-    </Sheet>
-  );
-}
-
 const styles = StyleSheet.create({
   head: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   between: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   tool: { width: '48%', flexGrow: 1, borderRadius: 14, paddingVertical: 14, paddingHorizontal: 12 },
+  trades: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  trade: { borderRadius: 999, paddingHorizontal: 14, paddingVertical: 9 },
 });

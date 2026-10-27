@@ -315,22 +315,22 @@ export function QuestionStep({
           <Button
             label={chosen.length ? `Contar ${chosen.length} ${chosen.length === 1 ? 'hábito' : 'hábitos'}` : 'Elige al menos uno'}
             disabled={!chosen.length}
-            onPress={() => onAnswer({ habits: chosen.filter((c) => !c.startsWith('own:')), custom: chosen.filter((c) => c.startsWith('own:')).map((c) => c.slice(4)) })}
+            onPress={() => onAnswer({ habits: chosen.filter((c) => !c.startsWith('own:') && !c.startsWith('ownr:')), custom: chosen.filter((c) => c.startsWith('own:')).map((c) => c.slice(4)), customReduce: chosen.filter((c) => c.startsWith('ownr:')).map((c) => c.slice(5)) })}
           />
           <HabitPicker
             suggestions={[...habits, ...EXTRA_HABITS]}
             chosen={chosen}
             onToggle={(h) => setChosen(toggle(chosen, h.code))}
-            onCreate={(name) => setChosen([...chosen, `own:${name}`])}
+            onCreate={(name, dir) => setChosen([...chosen, `${dir === 'reduce' ? 'ownr' : 'own'}:${name}`])}
           />
-          {chosen.filter((c) => c.startsWith('own:')).map((c) => (
-            <AppText key={c} variant="caption" color={colors.accent}>{`✓ ${c.slice(4)} (tuyo)`}</AppText>
+          {chosen.filter((c) => c.startsWith('own:') || c.startsWith('ownr:')).map((c) => (
+            <AppText key={c} variant="caption" color={c.startsWith('ownr:') ? colors.mid : colors.accent}>{`✓ ${c.slice(c.indexOf(':') + 1)} (tuyo, ${c.startsWith('ownr:') ? 'para bajar' : 'para sumar'})`}</AppText>
           ))}
           {/* Al llegar abajo también se sigue (usuario, 26-10-2026: «solo dice saltar»). */}
           <Button
             label={chosen.length ? `Siguiente · contar ${chosen.length}` : 'Siguiente'}
             disabled={!chosen.length}
-            onPress={() => onAnswer({ habits: chosen.filter((c) => !c.startsWith('own:')), custom: chosen.filter((c) => c.startsWith('own:')).map((c) => c.slice(4)) })}
+            onPress={() => onAnswer({ habits: chosen.filter((c) => !c.startsWith('own:') && !c.startsWith('ownr:')), custom: chosen.filter((c) => c.startsWith('own:')).map((c) => c.slice(4)), customReduce: chosen.filter((c) => c.startsWith('ownr:')).map((c) => c.slice(5)) })}
           />
         </View>
       ) : q.multi ? (

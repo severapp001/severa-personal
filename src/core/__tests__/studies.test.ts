@@ -1,6 +1,6 @@
 import { describe, expect, it } from '@jest/globals';
 
-import { courseAverage, daysUntil, neededGrade, upcoming, weekPlan, type Assessment } from '../studies';
+import { classesOn, courseAverage, daysUntil, isoWeekday, neededGrade, upcoming, weekPlan, type Assessment } from '../studies';
 
 const a = (id: string, grade: number | null, weight: number | null, due_on: string | null = null): Assessment => ({ id, course_id: 'c', title: id, due_on, weight, grade });
 
@@ -46,5 +46,24 @@ describe('agenda', () => {
       [3, ['1']],
     ]);
     expect(daysUntil('2026-11-01', '2026-10-18')).toBe(14);
+  });
+});
+
+describe('clases del día (26-10-2026)', () => {
+  const blocks = [
+    { id: 'b1', course_id: 'c1', weekday: 4, starts_at: '20:30:00', ends_at: '22:00:00', room: null },
+    { id: 'b2', course_id: 'c2', weekday: 4, starts_at: '10:00:00', ends_at: '11:30:00', room: null },
+    { id: 'b3', course_id: 'c1', weekday: 2, starts_at: '09:00:00', ends_at: '10:00:00', room: null },
+  ];
+  const courses = [
+    { id: 'c1', name: 'Ingeniería económica', program_id: 'p1' },
+    { id: 'c2', name: 'Cálculo', archived: 1 },
+  ];
+  const programs = [{ id: 'p1', day: '2026-09-01', until: '2026-12-15' }];
+
+  it('trae las de ese día de la semana, vigentes y dentro del período', () => {
+    expect(isoWeekday('2026-10-29')).toBe(4);
+    expect(classesOn('2026-10-29', blocks, courses, programs).map((c) => c.block.id)).toEqual(['b1']);
+    expect(classesOn('2026-12-17', blocks, courses, programs)).toEqual([]);
   });
 });

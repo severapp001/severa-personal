@@ -96,7 +96,7 @@ export default function ConocerteScreen() {
 
   // Los hábitos elegidos quedan listos para contarse en Hoy (si falla, se activan desde Hoy).
   async function createChosenHabits(answer: unknown) {
-    const a = answer as { habits?: string[]; custom?: string[] } | undefined;
+    const a = answer as { habits?: string[]; custom?: string[]; customReduce?: string[] } | undefined;
     if (!personalSpace || !a) return;
     const all = [...habits, ...EXTRA_HABITS];
     const have = new Set(currentHabits.map(habitKey));
@@ -108,9 +108,9 @@ export default function ConocerteScreen() {
         const target = 'target' in h && h.target && h.target > 1 && h.target <= 20 ? h.target : 1;
         await insertRecord('habits', personalSpace, session?.user.id, { name: h.name, direction: h.direction, template_code: h.code, daily_target: target, unit: ('unit' in h && h.unit) || null, active: true, sort_order: 0 });
       }
-      for (const name of a.custom ?? []) {
+      for (const [name, direction] of [...(a.custom ?? []).map((n) => [n, 'good'] as const), ...(a.customReduce ?? []).map((n) => [n, 'reduce'] as const)]) {
         if (have.has(habitKey({ template_code: null, name }))) continue;
-        await insertRecord('habits', personalSpace, session?.user.id, { name, direction: 'good', template_code: null, daily_target: 1, unit: null, active: true, sort_order: 0 });
+        await insertRecord('habits', personalSpace, session?.user.id, { name, direction, template_code: null, daily_target: 1, unit: null, active: true, sort_order: 0 });
       }
     } catch {
       // Sin espacio cargado todavía: la tarjeta de Hoy ofrece activarlos.

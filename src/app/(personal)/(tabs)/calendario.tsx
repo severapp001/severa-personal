@@ -1,4 +1,4 @@
-import { useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
@@ -6,13 +6,18 @@ import Svg, { Circle } from 'react-native-svg';
 import { eventsOn, eventTime, longDay, monthGrid, monthLabel, type CalendarEvent, type Task } from '@/core/agenda';
 import { dayKey } from '@/core/today';
 import { useAgenda, useHolidays } from '@/data/agenda';
+import { useEntries, type Entry } from '@/data/entries';
 import { useJournal } from '@/data/journal';
+import { useStudies } from '@/data/modules';
+import { classesOn } from '@/core/studies';
 import { AgendaSheet, type AgendaTarget } from '@/features/agenda/AgendaSheet';
 import { useMoodColor } from '@/features/journal/useMoodColor';
 import { DayLineFull } from '@/features/today/DayLine';
 import { Card, PrivateNote } from '@/features/today/PersonalCards';
 import { useToday } from '@/features/today/useToday';
-import { WorkDayFull } from '@/features/today/WorkToday';
+import { useWork, WorkDayFull } from '@/features/today/WorkToday';
+import { activeJobs } from '@/features/work/jobs';
+import { PlanSheet } from '@/features/work/PlanSheet';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fonts, space } from '@/theme/tokens';
 import { AppText, Button, Screen } from '@/ui';
@@ -36,6 +41,8 @@ export default function CalendarioScreen() {
   // Desde el + se llega con ?nuevo=event o ?nuevo=task (26-10-2026).
   const { nuevo } = useLocalSearchParams<{ nuevo?: string }>();
   const [target, setTarget] = useState<AgendaTarget | null>(nuevo === 'event' || nuevo === 'task' ? { kind: nuevo } : null);
+  const [planning, setPlanning] = useState(false);
+  const work = useWork(today);
   const weeks = monthGrid(month.y, month.m);
   const agenda = useAgenda(weeks[0][0].day, weeks.at(-1)!.at(-1)!.day);
   const holidays = useHolidays();
@@ -44,6 +51,24 @@ export default function CalendarioScreen() {
   const moodColor = useMoodColor();
   const mood = new Map(journal.days.filter((d) => d.mood).map((d) => [d.day, Number(d.mood)]));
 
+  // Las clases de Estudios en cada día, con su asistencia (la misma marca de Tu día).
+  const studies = useStudies();
+  const store = useEntries(['hoy', 'estudios', 'metas']);
+  // Los pasos de las metas con día (27-10-2026: «pasos al calendario»), con su mismo check.
+  const goalsById = new Map(store.entries.filter((e) => e.module === 'metas' && e.kind === 'meta').map((g) => [g.id, g]));
+  const stepsOn = (day: string) => store.entries.filter((e) => e.module === 'metas' && e.kind === 'paso' && e.day === day && !goalsById.get(e.parent_id ?? '')?.done);
+  const toggleStep = (step: Entry) => {
+    tap();
+    return store.update(step.id, { done: !step.done, data: { ...step.data, hecho: step.done ? null : today } });
+  };
+  const programs = store.entries.filter((e) => e.kind === 'programa');
+  const attended = (day: string, blockId: string) => store.entries.some((e) => e.module === 'hoy' && e.kind === 'hecho' && e.day === day && e.title === `clase:${blockId}`);
+  const toggleClass = (day: string, blockId: string) => {
+    tap();
+    const row = store.entries.find((e) => e.module === 'hoy' && e.kind === 'hecho' && e.day === day && e.title === `clase:${blockId}`);
+    return row ? store.remove(row.id) : store.add({ module: 'hoy', kind: 'hecho', day, title: `clase:${blockId}` });
+  };
+  const dayClasses = classesOn(selected, studies.blocks, studies.courses, programs);
   const dayEvents = eventsOn(agenda.events, selected);
   const dayTasks = agenda.tasks.filter((x) => x.due_on === selected && x.status !== 'dismissed');
   const eventDone = (e: CalendarEvent) => agenda.states.some((s) => s.day === selected && s.origin_type === 'event' && s.origin_id === e.id && s.status === 'done');
@@ -83,9 +108,15 @@ export default function CalendarioScreen() {
               const isSel = day === selected;
               const evs = eventsOn(agenda.events, day);
               const tks = agenda.tasks.filter((x) => x.due_on === day && x.status !== 'dismissed');
-              const count = evs.length + tks.filter((x) => x.status === 'pending').length;
-              const total = evs.length + tks.length;
-              const doneN = evs.filter((e) => agenda.states.some((st) => st.day === day && st.origin_type === 'event' && st.origin_id === e.id && st.status === 'done')).length + tks.filter((x) => x.status === 'done').length;
+              const cls = classesOn(day, studies.blocks, studies.courses, programs);
+              const sts = stepsOn(day);
+              const count = evs.length + tks.filter((x) => x.status === 'pending').length + cls.length + sts.filter((x) => !x.done).length;
+              const total = evs.length + tks.length + cls.length + sts.length;
+              const doneN =
+                evs.filter((e) => agenda.states.some((st) => st.day === day && st.origin_type === 'event' && st.origin_id === e.id && st.status === 'done')).length +
+                tks.filter((x) => x.status === 'done').length +
+                cls.filter((c) => attended(day, c.block.id)).length +
+                sts.filter((x) => x.done).length;
               const ratio = total ? doneN / total : 0;
               const holiday = holidays.get(day);
               return (
@@ -139,13 +170,19 @@ export default function CalendarioScreen() {
             {`Feriado · ${holidays.get(selected)}`}
           </AppText>
         ) : null}
+        {dayClasses.map(({ block, course }) => (
+          <Row key={`c-${block.id}`} title={`Clase: ${course.name}`} sub={`${block.starts_at.slice(0, 5)} – ${block.ends_at.slice(0, 5)}${block.room ? ` · sala ${block.room}` : ''}${course.teacher ? ` · ${course.teacher}` : ''}`} done={attended(selected, block.id)} onCheck={() => toggleClass(selected, block.id)} onOpen={() => router.push('/estudios')} />
+        ))}
+        {stepsOn(selected).map((x) => (
+          <Row key={`m-${x.id}`} title={x.title ?? 'Paso'} sub={`Meta: ${goalsById.get(x.parent_id ?? '')?.title ?? ''}`} done={x.done} onCheck={() => toggleStep(x)} onOpen={() => router.push('/metas')} />
+        ))}
         {dayEvents.map((e) => (
           <Row key={e.id} title={`${Number(e.importance) === 2 ? '‼ ' : Number(e.importance) === 1 ? '★ ' : ''}${e.title}`} sub={`${eventTime(e)}${e.location ? ` · ${e.location}` : ''}`} done={eventDone(e)} onCheck={() => agenda.setState(selected, 'event', e.id, eventDone(e) ? null : 'done')} onOpen={() => setTarget({ kind: 'event', event: e })} />
         ))}
         {dayTasks.map((x: Task) => (
           <Row key={x.id} title={x.title} sub={x.due_at ? `Tarea · ${x.due_at.slice(0, 5)}` : 'Tarea'} done={x.status === 'done'} onCheck={() => agenda.completeTask(x.id, x.status !== 'done', selected)} onOpen={() => setTarget({ kind: 'task', task: x })} />
         ))}
-        {!dayEvents.length && !dayTasks.length ? (
+        {!dayEvents.length && !dayTasks.length && !dayClasses.length ? (
           <AppText variant="caption" muted>
             Nada en la agenda. Mantén presionado un día para agregar un evento.
           </AppText>
@@ -158,6 +195,7 @@ export default function CalendarioScreen() {
             <Button label="+ Tarea" kind="secondary" onPress={() => setTarget({ kind: 'task' })} />
           </View>
         </View>
+        {work.jobs.length ? <Button label="Planificar trabajo (varios días)" kind="secondary" onPress={() => setPlanning(true)} /> : null}
       </Card>
 
       {selected === today ? (
@@ -173,6 +211,7 @@ export default function CalendarioScreen() {
       ) : null}
       <PrivateNote />
       <AgendaSheet agenda={agenda} target={target} day={selected} onClose={() => setTarget(null)} />
+      <PlanSheet visible={planning} jobs={activeJobs(work.jobs, today).length ? activeJobs(work.jobs, today) : work.jobs} agenda={agenda} day={selected} onClose={() => setPlanning(false)} />
     </Screen>
   );
 }

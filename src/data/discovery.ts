@@ -152,6 +152,17 @@ export async function setOnboardingAnswer(accountId: string, current: Record<str
   invalidateRemote();
 }
 
+/** Cambia los oficios de Conocerte (27-10-2026: «no puedo sacar el chofer de app»). */
+export async function setOnboardingTrades(accountId: string, trades: string[]) {
+  if (db) {
+    await db.execute('UPDATE onboarding_answers SET trades = ?, updated_at = ? WHERE id = ?', [JSON.stringify(trades), new Date().toISOString(), accountId]);
+    return;
+  }
+  const { error } = await supabase.from('onboarding_answers').update({ trades }).eq('account_id', accountId);
+  if (error) throw error;
+  invalidateRemote();
+}
+
 export async function setNeuronState(code: string, state: NeuronState, how = 'own') {
   const { error } = await supabase.rpc('set_neuron_state', { p_code: code, p_state: state, p_how: how });
   if (error) throw error;

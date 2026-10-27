@@ -2,6 +2,7 @@ import { useLocalSearchParams } from 'expo-router';
 
 import { MODULES } from '@/features/modules/catalog';
 import { ModuleBody } from '@/features/modules/ModuleScreen';
+import { RoutineScreen } from '@/features/routine/RoutineScreen';
 import { ModuleHeader } from '@/features/space/ModuleHeader';
 import { Screen } from '@/ui';
 import { Empty } from '@/ui/kit';
@@ -11,6 +12,8 @@ import { Empty } from '@/ui/kit';
 export default function ModuloScreen() {
   const { code, nuevo } = useLocalSearchParams<{ code: string; nuevo?: string }>();
   const def = MODULES[code ?? ''];
+  // Tu rutina tiene pantalla propia desde el 27-10-2026: junta trabajos, clases y bloques.
+  if (code === 'tu_rutina') return <RoutineScreen nuevo={nuevo} />;
   if (!def) {
     return (
       <Screen>

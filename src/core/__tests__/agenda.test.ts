@@ -1,6 +1,6 @@
 import { describe, expect, it } from '@jest/globals';
 
-import { addDays, dailyPriorities, eventsOn, eventTime, monthGrid, occursOn, parseTime, upcomingReminders, type CalendarEvent, type PriorityInput, type Task } from '../agenda';
+import { addDays, closingReminders, dailyPriorities, eventsOn, eventTime, monthGrid, occursOn, parseTime, upcomingReminders, type CalendarEvent, type PriorityInput, type Task } from '../agenda';
 
 const ev = (id: string, event_date: string, extra: Partial<CalendarEvent> = {}): CalendarEvent => ({
   id,
@@ -123,5 +123,19 @@ describe('dailyPriorities', () => {
       ['task:hecha', true],
       ['event:reunion', true],
     ]);
+  });
+});
+
+describe('closingReminders', () => {
+  it('avisa cada día a la hora elegida, salta los días cerrados y la hora que ya pasó', () => {
+    const now = new Date(2026, 9, 27, 22, 0);
+    const list = closingReminders('21:30', now, new Set(['2026-10-29']), 4);
+    expect(list.map((r) => r.id)).toEqual(['cierre:2026-10-28', 'cierre:2026-10-30']);
+    expect(list[0].at.getHours()).toBe(21);
+    expect(list[0].at.getMinutes()).toBe(30);
+    expect(list[0].url).toBe('/cierre');
+  });
+  it('sin una hora válida no avisa', () => {
+    expect(closingReminders('', new Date(2026, 9, 27, 8, 0), new Set())).toEqual([]);
   });
 });

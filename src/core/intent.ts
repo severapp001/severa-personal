@@ -506,7 +506,7 @@ function answer(text: string, ctx: Ctx, data: IntentData): string | null {
 }
 
 export const HELP = [
-  'No te entendí. Sin IA entiendo frases como:',
+  'No te entendí. Toca «Anotarlo con opciones» y te pregunto paso a paso, o escribe frases como:',
   '• «gasté 5 lucas en el almuerzo» o «me pagaron 800 mil»',
   '• «+1 agua» o «fumé 2»',
   '• «dentista mañana a las 10, avísame una hora antes»',

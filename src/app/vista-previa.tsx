@@ -2,12 +2,26 @@ import { useState, type ReactNode } from 'react';
 import { Pressable, useWindowDimensions, View } from 'react-native';
 
 import type { Neuron, NeuronState, Synapse } from '@/core/discovery';
+import AsistenteScreen from '@/app/(personal)/asistente';
+import CuerpoMenteAlmaScreen from '@/app/(personal)/cuerpo-mente-alma';
 import JuegosScreen from '@/app/(personal)/juegos';
+import PerfilScreen from '@/app/(personal)/perfil';
 import LogrosScreen from '@/app/(personal)/logros';
 import ResumenScreen from '@/app/(personal)/resumen';
 import FinanzasScreen from '@/app/(personal)/finanzas';
 import EstudiosScreen from '@/app/(personal)/estudios';
 import TrabajoScreen from '@/app/(personal)/(tabs)/trabajo';
+import InicioScreen from '@/app/(personal)/(tabs)/index';
+import ModulosScreen from '@/app/(personal)/(tabs)/modulos';
+import CalendarioScreen from '@/app/(personal)/(tabs)/calendario';
+import HabitosScreen from '@/app/(personal)/habitos';
+import MetasScreen from '@/app/(personal)/metas';
+import ZenScreen from '@/app/(personal)/zen';
+import RespiracionScreen from '@/app/(personal)/respiracion';
+import MeditacionScreen from '@/app/(personal)/meditacion';
+import CierreScreen from '@/app/(personal)/cierre';
+import { RoutineScreen } from '@/features/routine/RoutineScreen';
+import { IntroOverlay } from '@/features/welcome/IntroOverlay';
 import { LiveBrain } from '@/features/discovery/LiveBrain';
 import { MODULES } from '@/features/modules/catalog';
 import { ModuleBody } from '@/features/modules/ModuleScreen';
@@ -56,7 +70,21 @@ function Preview() {
   const [replay, setReplay] = useState(0);
   const [selected, setSelected] = useState<string | null>(null);
   const screens: Record<string, ReactNode> = {
+    'Intro (palabras → logo)': <IntroOverlay key={replay} preview />,
+    Inicio: <InicioScreen />,
+    Módulos: <ModulosScreen />,
+    Calendario: <CalendarioScreen />,
+    Hábitos: <HabitosScreen />,
+    Metas: <MetasScreen />,
+    Zen: <ZenScreen />,
+    Respiración: <RespiracionScreen />,
+    Meditación: <MeditacionScreen />,
+    'Cerrar el día': <CierreScreen />,
+    'Tu rutina (pantalla nueva)': <RoutineScreen />,
     Resumen: <ResumenScreen />,
+    Perfil: <PerfilScreen />,
+    'Cuerpo, mente y alma': <CuerpoMenteAlmaScreen />,
+    Asistente: <AsistenteScreen />,
     Logros: <LogrosScreen />,
     Juegos: <JuegosScreen />,
     Finanzas: <FinanzasScreen />,

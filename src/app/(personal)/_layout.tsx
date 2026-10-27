@@ -1,6 +1,6 @@
 import { Stack } from 'expo-router';
 
-import { useReminders } from '@/features/notifications/useReminders';
+import { useOpenFromNotification, useReminders } from '@/features/notifications/useReminders';
 import { SpaceCrossProvider } from '@/features/space/SpaceCross';
 import { IntroOverlay } from '@/features/welcome/IntroOverlay';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -12,6 +12,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 export default function PersonalLayout() {
   const { colors } = useTheme();
   useReminders();
+  useOpenFromNotification();
   return (
     <SpaceCrossProvider>
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>

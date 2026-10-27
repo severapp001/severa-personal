@@ -11,6 +11,7 @@ import { updateRecord } from '@/data/records';
 import { supabase } from '@/data/supabase';
 import { useMoodColor } from '@/features/journal/useMoodColor';
 import { ModuleHeader } from '@/features/space/ModuleHeader';
+import { ThreeParts } from '@/features/stats/ThreeParts';
 import { useLifeStats } from '@/features/stats/useLifeStats';
 import { useToday } from '@/features/today/useToday';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -95,6 +96,9 @@ export default function PerfilScreen() {
         {goals.length ? <AppText variant="caption" muted>{`Usas Severa para: ${goals.join(', ').toLowerCase()}.`}</AppText> : null}
         {interests.length ? <AppText variant="caption" muted>{`Te gusta: ${interests.join(', ').toLowerCase()}.`}</AppText> : null}
       </Panel>
+
+      <ThreeParts stats={s} today={today} />
+      <Button label="Metas y desafíos" kind="secondary" onPress={() => router.push('/cuerpo-mente-alma')} />
 
       <View style={styles.streaks}>
         {streaks.map((x) => (

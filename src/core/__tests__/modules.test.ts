@@ -1,6 +1,6 @@
 import { describe, expect, it } from '@jest/globals';
 
-import { bmi, dailyCalories, expiry, predictCycle, settle, sharedBalances, streak, weekMinutes, weekStart } from '../modules';
+import { bmi, dailyCalories, daysShare, expiry, partScores, predictCycle, settle, sharedBalances, streak, weekMinutes, weekStart } from '../modules';
 
 describe('gastos compartidos', () => {
   it('reparte en partes iguales y descuenta los pagos', () => {
@@ -63,5 +63,28 @@ describe('ejercicio, vencimientos y rachas', () => {
     expect(streak(['2026-10-24', '2026-10-25'], '2026-10-26')).toBe(2);
     expect(streak(['2026-10-24', '2026-10-25', '2026-10-26'], '2026-10-26')).toBe(3);
     expect(streak(['2026-10-23'], '2026-10-26')).toBe(0);
+  });
+});
+
+describe('cuerpo, mente y alma', () => {
+  it('promedia solo lo que se sabe y separa lo que falta', () => {
+    const [cuerpo, mente, alma] = partScores({
+      cuerpo: [
+        { name: 'Ejercicio', value: 0.5, hint: '' },
+        { name: 'Agua', value: 1.2, hint: '' },
+        { name: 'Comidas', value: null, hint: 'Anota tus comidas' },
+      ],
+      mente: [{ name: 'Diario', value: null, hint: 'Escribe en tu diario' }],
+      alma: [{ name: 'Gratitud', value: 0.2, hint: '' }],
+    });
+    expect(cuerpo.score).toBe(75);
+    expect(cuerpo.missing.map((s) => s.name)).toEqual(['Comidas']);
+    expect(mente.score).toBeNull();
+    expect(alma.score).toBe(20);
+  });
+
+  it('cuenta los días con algo en la ventana', () => {
+    expect(daysShare(['2026-10-26', '2026-10-24'], '2026-10-26', 4, true)).toBe(0.5);
+    expect(daysShare([], '2026-10-26', 7, false)).toBeNull();
   });
 });

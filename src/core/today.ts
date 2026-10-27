@@ -12,6 +12,8 @@ export type DayItem = {
   sub: string;
   icon: DayIcon;
   work?: boolean;
+  /** Sin hora fija: se hace en algún momento del día (26-10-2026). */
+  flexible?: boolean;
 };
 
 export const DEFAULT_WAKE = '07:00';
@@ -54,6 +56,9 @@ export type DayInput = {
   works: boolean;
   /** Hábitos que eligió contar (códigos de habit_templates). */
   habits: string[];
+  /** Su día no tiene horario fijo (usuario, 26-10-2026: «no tengo hora de despertar o dormir»):
+   *  sin despertar ni dormir, y lo demás queda «durante el día», sin hora. */
+  variable?: boolean;
 };
 
 /** La línea del día en Personal, en orden. Las horas que no sabemos se toman por defecto. */
@@ -80,6 +85,12 @@ export function personalDay(input: DayInput): DayItem[] {
   }
   if (input.habits.includes('leer')) items.push({ id: 'leer', t: sleep - 45, title: 'Leer 10 minutos', sub: 'Hábito', icon: 'book' });
   items.push({ id: 'dormir', t: sleep, title: 'Dormir', sub: sleepKnown === null ? 'Hora aproximada' : `${duration(1440 - (sleep - wake))} de sueño`, icon: 'moon' });
+  if (input.variable) {
+    return items
+      .filter((i) => i.id !== 'despertar' && i.id !== 'dormir' && i.id !== 'jornada')
+      .map((i) => ({ ...i, flexible: true, sub: i.sub.replace(/ · \d+ (min|h)$/, '') }))
+      .sort((a, b) => a.t - b.t);
+  }
   return items.sort((a, b) => a.t - b.t);
 }
 

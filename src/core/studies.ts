@@ -52,3 +52,36 @@ export function daysUntil(dateIso: string, todayIso: string): number {
   const [y2, m2, d2] = dateIso.split('-').map(Number);
   return Math.round((Date.UTC(y2, m2 - 1, d2) - Date.UTC(y1, m1 - 1, d1)) / 86400000);
 }
+
+/** Día de la semana de una fecha «AAAA-MM-DD» (1 = lunes … 7 = domingo). */
+export function isoWeekday(day: string): number {
+  const wd = new Date(Number(day.slice(0, 4)), Number(day.slice(5, 7)) - 1, Number(day.slice(8, 10)), 12).getDay();
+  return wd === 0 ? 7 : wd;
+}
+
+export type ClassOnDay = { block: Block; course: { id: string; name: string; teacher?: string | null } };
+
+/**
+ * Las clases de un día (26-10-2026, usuario: «sus clases no se ven en calendario ni en
+ * prioridades»): los bloques de ese día de la semana, de ramos vigentes y dentro de las fechas de
+ * su programa (si las tiene).
+ */
+export function classesOn(
+  day: string,
+  blocks: Block[],
+  courses: { id: string; name: string; teacher?: string | null; archived?: number | boolean | null; program_id?: string | null }[],
+  programs: { id: string; day: string | null; until: string | null }[],
+): ClassOnDay[] {
+  const wd = isoWeekday(day);
+  const out: ClassOnDay[] = [];
+  for (const b of blocks) {
+    if (Number(b.weekday) !== wd) continue;
+    const course = courses.find((c) => c.id === b.course_id);
+    if (!course || course.archived === true || course.archived === 1) continue;
+    const program = programs.find((p) => p.id === course.program_id);
+    if (program?.day && program.day > day) continue;
+    if (program?.until && program.until < day) continue;
+    out.push({ block: b, course });
+  }
+  return out.sort((a, b) => a.block.starts_at.localeCompare(b.block.starts_at));
+}

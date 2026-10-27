@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import type { BottomTabBarProps } from 'expo-router/js-tabs';
 import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
@@ -11,17 +12,20 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { fonts } from '@/theme/tokens';
 import { AppText } from '@/ui';
 import { tap } from '@/ui/haptics';
-import { BriefcaseIcon, CalendarBlankIcon, HouseIcon, PlusIcon, SquaresFourIcon, type Icon } from '@/ui/icons';
+import { CalendarBlankIcon, ChatCircleTextIcon, HouseIcon, PlusIcon, SquaresFourIcon, type Icon } from '@/ui/icons';
 
-// Barra inferior (sistema de diseño §5). Desde el 26-10-2026 (usuario: «Trabajo debería tener su
-// botón en la barra»): Hoy · Calendario · + · Trabajo · Módulos; Ajustes queda en el engranaje de
-// arriba. En Trabajo, encima va la barra de hábitos rápidos (A3). El + abre el registro rápido
-// personalizable (QuickPanel). El asistente tiene su propio botón flotante (AssistantFab).
+// Barra inferior (sistema de diseño §5). Ajustes queda en el engranaje de arriba. En Trabajo, encima va la barra de hábitos rápidos (A3). El + abre el registro rápido
+// personalizable (QuickPanel).
 
+// 26-10-2026 (noche, usuario: «quisiera sacar el botón de Trabajo de la barra inferior, con el
+// botón superior está bien»): Hoy · Calendario · + · Metas · Módulos. Metas es lo central para
+// cumplir objetivos (TDAH); Trabajo se abre con el interruptor de arriba.
+// 27-10-2026 (usuario: «Metas no me convence del todo… dejaría algo como ideas, quizás el asistente
+// estaría bien»): en su lugar va el Asistente, que también guarda ideas; Metas se abre desde Hoy
+// («Tu próximo paso»), Módulos y Cuerpo, mente y alma. Ya no hace falta su botón flotante.
 const TABS: Record<string, { label: string; Icon: Icon }> = {
   index: { label: 'Hoy', Icon: HouseIcon },
   calendario: { label: 'Calendario', Icon: CalendarBlankIcon },
-  trabajo: { label: 'Trabajo', Icon: BriefcaseIcon },
   modulos: { label: 'Módulos', Icon: SquaresFourIcon },
 };
 
@@ -77,6 +81,20 @@ export function TabBar({ state, navigation, onHeight }: BottomTabBarProps & { on
           <View style={[styles.plus, { backgroundColor: colors.accent }]}>
             <PlusIcon size={26} weight="bold" color={colors.onAccent} />
           </View>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Asistente"
+          onPress={() => {
+            tap();
+            router.push('/asistente');
+          }}
+          style={styles.tab}
+        >
+          <ChatCircleTextIcon size={24} color={colors.muted} />
+          <AppText variant="caption" color={colors.muted} style={styles.label}>
+            Asistente
+          </AppText>
         </Pressable>
         {routes.slice(2).map((r) => tabButton(r.name))}
       </View>

@@ -4,6 +4,7 @@ import { Alert, Pressable, StyleSheet, View } from 'react-native';
 import { dayKey } from '@/core/today';
 import { useHabitTemplates } from '@/data/discovery';
 import { useHabits } from '@/data/modules';
+import { HabitDetail } from '@/features/habits/HabitDetail';
 import { EXTRA_HABITS, HabitPicker, type HabitSuggestion } from '@/features/habits/HabitPicker';
 import { ModuleHeader } from '@/features/space/ModuleHeader';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -27,6 +28,7 @@ export default function HabitosScreen() {
   ];
   const mine = h.habits.map((x) => x.template_code ?? `own:${x.id}`);
   const [picking, setPicking] = useState(false);
+  const [detail, setDetail] = useState<string | null>(null);
 
   const toggle = (s: HabitSuggestion) => {
     const existing = h.habits.find((x) => x.template_code === s.code);
@@ -51,14 +53,14 @@ export default function HabitosScreen() {
                 const done = !reduce && n >= target;
                 return (
                   <View key={x.id} style={[styles.row, { borderBottomColor: colors.line }]}>
-                    <View style={{ flex: 1, gap: 2 }}>
+                    <Pressable accessibilityRole="button" accessibilityHint="Ver racha y editar" onPress={() => setDetail(x.id)} style={{ flex: 1, gap: 2 }}>
                       <AppText variant="label" style={{ fontSize: 15 }} color={done ? colors.ok : colors.text}>
                         {x.name}
                       </AppText>
                       <AppText variant="caption" muted>
-                        {reduce ? (n ? `Hoy: ${n}. Sin culpas, solo números.` : 'Hoy: ninguno.') : `${n} de ${target}${x.unit ? ` ${x.unit}` : ''}${done ? ' · ¡listo!' : ''}`}
+                        {`${reduce ? (n ? `Hoy: ${n}. Sin culpas, solo números.` : 'Hoy: ninguno.') : `${n} de ${target}${x.unit ? ` ${x.unit}` : ''}${done ? ' · ¡listo!' : ''}`} · ver racha`}
                       </AppText>
-                    </View>
+                    </Pressable>
                     <Pressable accessibilityRole="button" accessibilityLabel={`Restar: ${x.name}`} onPress={() => n && h.log(x.id, -1)} style={[styles.btn, { backgroundColor: colors.surface2 }]}>
                       <MinusIcon size={18} color={colors.muted} />
                     </Pressable>
@@ -109,11 +111,12 @@ export default function HabitosScreen() {
             suggestions={suggestions}
             chosen={mine}
             onToggle={toggle}
-            onCreate={(name) => h.addHabit({ name, direction: 'good' })}
+            onCreate={(name, direction) => h.addHabit({ name, direction })}
           />
           {h.habits.length ? <Button label="Listo" onPress={() => setPicking(false)} /> : null}
         </>
       )}
+      <HabitDetail habit={h.habits.find((x) => x.id === detail) ?? null} today={day} onClose={() => setDetail(null)} onArchive={(id) => h.archive(id)} />
     </Screen>
   );
 }

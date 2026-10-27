@@ -87,36 +87,37 @@ function NeuronDot({
 }) {
   const on = state === 'discovered';
   const pending = state === 'suggested';
-  const base = (on ? 6 : pending ? 5.5 : 4) * scale;
+  // Tamaño fijo y solo transformaciones (mover y escalar) en cada cuadro: el teléfono las anima
+  // sin recalcular el diseño (26-10-2026, usuario: «más dinámico, pero poco fluido»).
+  const size = (on ? 12 : pending ? 11 : 8) * scale * (selected ? 1.5 : 1);
+  const halo = size * 2.4;
   const alpha = on || pending ? 1 : 0.35;
   const style = useAnimatedStyle(() => {
     const k = appear.value;
-    const beat = on ? 1 + 0.18 * Math.sin(2 * Math.PI * (clock.value * 2 + phase)) : 1;
+    const beat = on ? 1 + 0.16 * Math.sin(2 * Math.PI * (clock.value * 2 + phase)) : 1;
     const drift = 1.2 * scale * Math.sin(2 * Math.PI * (clock.value + phase));
-    const size = base * 2 * beat * (selected ? 1.5 : 1);
     return {
-      width: size,
-      height: size,
-      borderRadius: size / 2,
       opacity: interpolate(k, [0, 0.2], [0, alpha], 'clamp'),
       transform: [
-        { translateX: (start.x + (p.x - start.x) * k) * scale - size / 2 + drift },
-        { translateY: (start.y + (p.y - start.y) * k) * scale - size / 2 - drift * 0.6 },
+        { translateX: (start.x + (p.x - start.x) * k) * scale - halo / 2 + drift },
+        { translateY: (start.y + (p.y - start.y) * k) * scale - halo / 2 - drift * 0.6 },
+        { scale: beat },
       ],
     };
   });
   return (
-    <Animated.View
-      pointerEvents="none"
-      style={[
-        styles.dot,
-        on && { backgroundColor: color, shadowColor: color, shadowOpacity: 0.9, shadowRadius: 6, elevation: 4 },
-        pending && { borderWidth: 1.8 * scale, borderColor: color },
-        !on && !pending && { backgroundColor: faint },
-        selected && { borderWidth: 2, borderColor: '#FFFFFF' },
-        style,
-      ]}
-    />
+    <Animated.View pointerEvents="none" style={[styles.dot, { width: halo, height: halo }, style]}>
+      {on ? <View style={{ position: 'absolute', width: halo, height: halo, borderRadius: halo / 2, backgroundColor: color, opacity: 0.16 }} /> : null}
+      <View
+        style={[
+          { width: size, height: size, borderRadius: size / 2 },
+          on && { backgroundColor: color },
+          pending && { borderWidth: 1.8 * scale, borderColor: color },
+          !on && !pending && { backgroundColor: faint },
+          selected && { borderWidth: 2, borderColor: '#FFFFFF' },
+        ]}
+      />
+    </Animated.View>
   );
 }
 
@@ -128,10 +129,10 @@ function Impulse({ a, b, clock, appear, offset, speed, color, scale }: { a: Poin
     const y = a.y + (b.y - a.y) * f;
     return {
       opacity: Math.sin(Math.PI * f) * interpolate(appear.value, [0.8, 1], [0, 1], 'clamp'),
-      transform: [{ translateX: x * scale - 2.5 }, { translateY: y * scale - 2.5 }],
+      transform: [{ translateX: x * scale - 3 }, { translateY: y * scale - 3 }],
     };
   });
-  return <Animated.View pointerEvents="none" style={[styles.impulse, { backgroundColor: color, shadowColor: color }, style]} />;
+  return <Animated.View pointerEvents="none" style={[styles.impulse, { backgroundColor: color }, style]} />;
 }
 
 export function LiveBrain({
@@ -273,6 +274,6 @@ export function LiveBrain({
 }
 
 const styles = StyleSheet.create({
-  dot: { position: 'absolute', left: 0, top: 0 },
-  impulse: { position: 'absolute', left: 0, top: 0, width: 5, height: 5, borderRadius: 3, shadowOpacity: 1, shadowRadius: 4, elevation: 3 },
+  dot: { position: 'absolute', left: 0, top: 0, alignItems: 'center', justifyContent: 'center' },
+  impulse: { position: 'absolute', left: 0, top: 0, width: 6, height: 6, borderRadius: 3 },
 });

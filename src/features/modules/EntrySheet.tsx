@@ -16,7 +16,7 @@ const COLUMNS = new Set(['title', 'body', 'day', 'until', 'amount', 'value', 'do
 
 export type SheetTarget = { kind: KindDef; entry?: Entry; parent?: Entry | null };
 
-function initialValues(kind: KindDef, entry?: Entry): Record<string, unknown> {
+export function initialValues(kind: KindDef, entry?: Entry): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const f of kind.fields) {
     const current = entry ? (COLUMNS.has(f.key) ? (entry as unknown as Record<string, unknown>)[f.key] : entry.data[f.key]) : undefined;
@@ -28,7 +28,25 @@ function initialValues(kind: KindDef, entry?: Entry): Record<string, unknown> {
   return out;
 }
 
-const filled = (v: unknown) => !(v === '' || v === null || v === undefined || v === 0 || (Array.isArray(v) && !v.length));
+export const filled = (v: unknown) => !(v === '' || v === null || v === undefined || v === 0 || (Array.isArray(v) && !v.length));
+
+/** Los valores del formulario como registro (columnas y `data`), o el error que falta corregir. */
+export function buildInput(kind: KindDef, values: Record<string, unknown>, entry?: Entry): EntryInput | string {
+  const missing = kind.fields.find((f) => f.required && !filled(values[f.key]));
+  if (missing) return `Falta: ${missing.label.replace(/ \(.*\)$/, '').toLowerCase()}.`;
+  const input: EntryInput = { kind: kind.kind, data: { ...(entry?.data ?? {}) } };
+  for (const f of kind.fields) {
+    let v = values[f.key];
+    if (f.kind === 'time') v = normalizeTime(String(v ?? '')) || null;
+    if (f.kind === 'number') v = filled(v) ? Number(String(v).replace(',', '.')) : null;
+    if (f.kind === 'amount') v = filled(v) ? Number(v) : null;
+    if ((f.kind === 'text' || f.kind === 'long' || f.kind === 'choice' || f.kind === 'date') && !filled(v)) v = null;
+    if (COLUMNS.has(f.key)) (input as Record<string, unknown>)[f.key] = f.kind === 'check' ? !!v : v;
+    else input.data![f.key] = v;
+  }
+  if (input.day && input.until && input.until < input.day) return 'La fecha de término debe ser después del inicio.';
+  return input;
+}
 
 export function EntrySheet({
   target,
@@ -70,19 +88,9 @@ function EntryForm({
   const set = (key: string, v: unknown) => setValues((s) => ({ ...s, [key]: v }));
 
   async function save() {
-    const missing = kind.fields.find((f) => f.required && !filled(values[f.key]));
-    if (missing) return setError(`Falta: ${missing.label.replace(/ \(.*\)$/, '').toLowerCase()}.`);
-    const input: EntryInput = { kind: kind.kind, data: { ...(entry?.data ?? {}) } };
-    for (const f of kind.fields) {
-      let v = values[f.key];
-      if (f.kind === 'time') v = normalizeTime(String(v ?? '')) || null;
-      if (f.kind === 'number') v = filled(v) ? Number(String(v).replace(',', '.')) : null;
-      if (f.kind === 'amount') v = filled(v) ? Number(v) : null;
-      if ((f.kind === 'text' || f.kind === 'long' || f.kind === 'choice' || f.kind === 'date') && !filled(v)) v = null;
-      if (COLUMNS.has(f.key)) (input as Record<string, unknown>)[f.key] = f.kind === 'check' ? !!v : v;
-      else input.data![f.key] = v;
-    }
-    if (input.day && input.until && input.until < input.day) return setError('La fecha de término debe ser después del inicio.');
+    const built = buildInput(kind, values, entry);
+    if (typeof built === 'string') return setError(built);
+    const input = built;
     if (!entry && target.parent) input.parent_id = target.parent.id;
     setBusy(true);
     setError(null);
@@ -127,7 +135,7 @@ function EntryForm({
   );
 }
 
-function FieldInput({ field: f, value, onChange, ctx }: { field: FieldDef; value: unknown; onChange: (v: unknown) => void; ctx: OptionsCtx }) {
+export function FieldInput({ field: f, value, onChange, ctx }: { field: FieldDef; value: unknown; onChange: (v: unknown) => void; ctx: OptionsCtx }) {
   const { colors } = useTheme();
   const options = typeof f.options === 'function' ? f.options(ctx) : (f.options ?? []);
   switch (f.kind) {
@@ -155,9 +163,17 @@ function FieldInput({ field: f, value, onChange, ctx }: { field: FieldDef; value
     case 'choice':
       return (
         <View style={{ gap: 6 }}>
-          <AppText variant="caption" muted>
-            {f.label}
-          </AppText>
+          {/* «Quitar» deja la opción en blanco (27-10-2026: «no puedo dejar tipo en blanco»). */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <AppText variant="caption" muted style={{ flex: 1 }}>
+              {f.label}
+            </AppText>
+            {value && !f.required ? (
+              <AppText variant="caption" color={colors.accent} onPress={() => onChange('')} suppressHighlighting>
+                Quitar
+              </AppText>
+            ) : null}
+          </View>
           {options.length ? (
             <ChipRow options={options.map((o) => ({ value: o, label: o }))} value={value ? String(value) : null} onChange={(v) => onChange(v === value ? '' : v)} />
           ) : (

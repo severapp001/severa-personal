@@ -142,3 +142,29 @@ export function streak(days: Iterable<string>, today: string): number {
   }
   return n;
 }
+
+// ─── Cuerpo, mente y alma (26-10-2026) ───────────────────────────────────────
+// Idea del usuario, inspirada en «Deja de ser tú» de Joe Dispenza: que Severa ayude a mirar las
+// tres partes de la persona y, a medida que el cerebro crece, la conozca mejor. Cada parte se arma
+// con señales de 0 a 1 que salen de lo registrado; sin señales, todavía no se sabe (null).
+
+export type Part = 'cuerpo' | 'mente' | 'alma';
+export type Signal = { name: string; value: number | null; hint: string };
+export type PartScore = { part: Part; score: number | null; known: Signal[]; missing: Signal[] };
+
+export function partScores(signals: Record<Part, Signal[]>): PartScore[] {
+  return (['cuerpo', 'mente', 'alma'] as const).map((part) => {
+    const known = signals[part].filter((s) => s.value !== null).map((s) => ({ ...s, value: Math.max(0, Math.min(1, s.value as number)) }));
+    const score = known.length ? Math.round((known.reduce((sum, s) => sum + (s.value as number), 0) / known.length) * 100) : null;
+    return { part, score, known, missing: signals[part].filter((s) => s.value === null) };
+  });
+}
+
+/** Días con algo, dentro de los últimos `n` días hasta hoy, como fracción (null si no hubo nada nunca). */
+export function daysShare(days: Iterable<string>, today: string, n: number, ever: boolean): number | null {
+  if (!ever) return null;
+  const set = new Set(days);
+  let hits = 0;
+  for (let i = 0; i < n; i++) if (set.has(plusDays(today, -i))) hits += 1;
+  return hits / n;
+}

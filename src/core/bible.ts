@@ -74,6 +74,26 @@ const DAILY: [string, number, number][] = [
   ['PRO', 16, 3], ['PSA', 91, 1], ['JOH', 14, 6], ['1PE', 5, 7], ['ROM', 5, 8], ['PSA', 139, 14], ['COL', 3, 23],
   ['MIC', 6, 8], ['PHI', 4, 6], ['JAM', 1, 5],
 ];
+/** Más versículos para «otro Pan de vida» (26-10-2026): al completar el del día aparece otro al azar. */
+const MORE: [string, number, number][] = [
+  ['PSA', 27, 1], ['PSA', 34, 18], ['PSA', 55, 22], ['PSA', 62, 1], ['PSA', 103, 2], ['PSA', 121, 1], ['PSA', 143, 8], ['PRO', 4, 23],
+  ['PRO', 17, 17], ['PRO', 18, 10], ['ISA', 26, 3], ['ISA', 43, 2], ['ISA', 54, 10], ['JER', 33, 3], ['NAH', 1, 7], ['ZEP', 3, 17],
+  ['MAT', 5, 9], ['MAT', 7, 7], ['MAT', 22, 37], ['MAR', 10, 27], ['LUK', 1, 37], ['LUK', 6, 31], ['JOH', 8, 32], ['JOH', 13, 34],
+  ['JOH', 15, 5], ['JOH', 16, 33], ['ACT', 1, 8], ['ROM', 8, 31], ['ROM', 12, 12], ['ROM', 15, 13], ['1CO', 10, 13], ['1CO', 16, 14],
+  ['2CO', 5, 17], ['2CO', 12, 9], ['GAL', 6, 9], ['EPH', 4, 32], ['PHI', 1, 6], ['PHI', 4, 8], ['COL', 3, 2], ['1TH', 5, 16],
+  ['2TI', 3, 16], ['HEB', 4, 16], ['HEB', 12, 1], ['HEB', 13, 5], ['JAM', 1, 17], ['1PE', 2, 9], ['1JO', 4, 18], ['1JO', 4, 19],
+  ['DEU', 31, 6], ['NUM', 6, 24], ['ECC', 3, 1], ['LAM', 3, 25], ['MAT', 5, 14], ['JOH', 10, 10], ['ROM', 10, 9],
+];
+export const PAN_VERSES: { book: string; chapter: number; verse: number }[] = [...DAILY, ...MORE].map(([book, chapter, verse]) => ({ book, chapter, verse }));
+
+/** Un versículo al azar distinto de los ya mostrados (`seen` = «LIB cap:vers»). */
+export function randomVerse(seen: string[], rnd: () => number = Math.random): { book: string; chapter: number; verse: number } {
+  const key = (v: { book: string; chapter: number; verse: number }) => `${v.book} ${v.chapter}:${v.verse}`;
+  const left = PAN_VERSES.filter((v) => !seen.includes(key(v)));
+  const pool = left.length ? left : PAN_VERSES;
+  return pool[Math.floor(rnd() * pool.length) % pool.length];
+}
+
 export function verseOfDay(day: string): { book: string; chapter: number; verse: number } {
   const d = new Date(Number(day.slice(0, 4)), Number(day.slice(5, 7)) - 1, Number(day.slice(8, 10)), 12);
   const start = new Date(d.getFullYear(), 0, 1, 12);

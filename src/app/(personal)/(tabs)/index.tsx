@@ -1,32 +1,58 @@
 import { router } from 'expo-router';
 import { useState, type ReactNode } from 'react';
-import { View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 
+import { addDays } from '@/core/agenda';
 import { greeting } from '@/core/today';
 import { AgendaPrioritiesCard } from '@/features/agenda/PrioritiesCard';
 import { NeuronSheet } from '@/features/discovery/NeuronSheet';
 import { SuggestionCard } from '@/features/discovery/SuggestionCard';
+import { MODULES } from '@/features/modules/catalog';
+import { NextStepCard } from '@/features/goals/NextStepCard';
 import { SpaceTopBar } from '@/features/space/SpaceHeader';
+import { usePref } from '@/features/space/usePref';
+import { ThreePartsMini } from '@/features/stats/ThreeParts';
+import { useLifeStats } from '@/features/stats/useLifeStats';
 import { HabitsCard } from '@/features/today/HabitsCard';
-import {
-  BibleCard,
-  DayCard,
-  JournalCard,
-  MoneyCard,
-  PrivateNote,
-  WorkLinkCard,
-} from '@/features/today/PersonalCards';
+import { BreathCard, MeditationCard, ZenCard } from '@/features/today/MindCards';
+import { ModuleHomeCard } from '@/features/today/ModuleHomeCard';
+import { BibleCard, DayCard, JournalCard, MoneyCard, PrivateNote, WorkLinkCard } from '@/features/today/PersonalCards';
 import { useToday, type Today } from '@/features/today/useToday';
 import { JornadaCard, WorkLineCard, WorkTasksCard } from '@/features/today/WorkToday';
 import { useTheme } from '@/theme/ThemeProvider';
-import { AppText, Screen } from '@/ui';
+import { fonts } from '@/theme/tokens';
+import { AppText, Button, Screen } from '@/ui';
+import { tap } from '@/ui/haptics';
+import { ArrowDownIcon, ArrowUpIcon, CaretLeftIcon, CaretRightIcon, PlusIcon, XIcon } from '@/ui/icons';
+import { Sheet } from '@/ui/kit';
 
-// Hoy (vista previa del 17-10-2026, variante B). En Personal se arma con lo que la persona eligió
-// en Conocerte y se ordena según la hora; en Trabajo es el modo foco: la jornada y sus tareas.
+// Hoy (vista previa del 17-10-2026, variante B). En Personal se arma con lo que la persona eligió en
+// Conocerte y se ordena según la hora; en Trabajo es el modo foco: la jornada y sus tareas.
+// 26-10-2026 (usuario): se puede ver otro día (atrás y adelante, como en la v1) y personalizar el
+// inicio: cada módulo tiene su tarjeta y se eligen y ordenan; sin tocar nada, manda lo de Severa.
 
 const DAYS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
 const MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+
+const CORE: Record<string, string> = {
+  dia: 'Tu día',
+  paso: 'Tu próximo paso (metas)',
+  yo: 'Cuerpo, mente y alma',
+  prio: 'Prioridades del día',
+  hab: 'Hábitos',
+  plata: 'Tu plata',
+  trab: 'Trabajo',
+  pan: 'Pan de vida',
+  diario: 'Cerrar el día',
+  zen: 'Zen · frase del día',
+  resp: 'Respiración',
+  medit: 'Meditación',
+  sug: 'Sugerencia de Severa',
+};
+// Las tarjetas que dependen de un módulo encendido (para no ofrecerlas si no está).
+const NEEDS: Record<string, string> = { pan: 'biblia', zen: 'zen', resp: 'respiracion', medit: 'meditacion' };
+const labelOf = (k: string) => CORE[k] ?? (k.startsWith('mod:') ? (MODULES[k.slice(4)]?.title ?? k) : k);
 
 function Stagger({ children }: { children: ReactNode[] }) {
   return (
@@ -40,69 +66,221 @@ function Stagger({ children }: { children: ReactNode[] }) {
   );
 }
 
-function personalCards(t: Today, openSheet: (code: string) => void): ReactNode[] {
+function PartsCard({ t }: { t: Today }) {
+  const stats = useLifeStats(t.day);
+  return <ThreePartsMini stats={stats} today={t.day} onOpen={() => router.push('/cuerpo-mente-alma')} />;
+}
+
+// Módulos que ya tienen su tarjeta propia en Inicio (Metas → «Tu próximo paso»).
+const OWN_CARD = new Set(['metas']);
+
+/** El orden de Severa: según la hora y con las tarjetas de los módulos encendidos. */
+function defaultOrder(t: Today): string[] {
   const h = t.now.getHours();
   const night = h >= 20 || h < 4;
   const morning = h >= 4 && h < 11;
-  const cards: Record<string, ReactNode> = {
-    dia: <DayCard t={t} onSeeAll={() => router.navigate('/calendario')} />,
-    prio: <AgendaPrioritiesCard day={t.day} />,
-    hab: <HabitsCard t={t} />,
-    plata: <MoneyCard t={t} />,
-    trab: t.works ? <WorkLinkCard t={t} /> : null,
-    pan: t.on.has('biblia') ? <BibleCard t={t} /> : null,
-    diario: t.on.has('diario') || t.on.has('gratitud') ? <JournalCard t={t} night={night} /> : null,
-    sug: t.suggestion ? (
-      <SuggestionCard
-        suggestion={t.suggestion}
-        neuron={t.neurons.find((n) => n.code === t.suggestion?.code)}
-        onLater={t.skipSuggestion}
-        onOpen={() => t.suggestion && openSheet(t.suggestion.code)}
-      />
-    ) : null,
-  };
-  const order = night
-    ? ['diario', 'dia', 'hab', 'prio', 'plata', 'trab', 'pan', 'sug']
+  const mods = Object.keys(MODULES)
+    .filter((c) => t.on.has(c) && !OWN_CARD.has(c))
+    .slice(0, 4)
+    .map((c) => `mod:${c}`);
+  const base = night
+    ? ['diario', 'dia', 'paso', 'hab', 'yo', 'prio', 'plata', 'trab', 'pan', 'medit', ...mods, 'sug']
     : morning
-      ? ['dia', 'pan', 'prio', 'hab', 'trab', 'plata', 'diario', 'sug']
-      : ['dia', 'trab', 'prio', 'hab', 'plata', 'pan', 'diario', 'sug'];
-  return order.map((k) => cards[k]).filter(Boolean);
+      ? ['dia', 'paso', 'yo', 'zen', 'pan', 'prio', 'hab', 'trab', 'plata', ...mods, 'diario', 'sug']
+      : ['dia', 'paso', 'trab', 'prio', 'hab', 'yo', 'plata', 'zen', 'pan', 'resp', ...mods, 'diario', 'sug'];
+  return base.filter((k) => !NEEDS[k] || t.on.has(NEEDS[k]));
+}
+
+function cardFor(key: string, t: Today, openSheet: (code: string) => void): ReactNode {
+  switch (key) {
+    case 'dia':
+      return <DayCard t={t} onSeeAll={() => router.navigate('/calendario')} />;
+    case 'paso':
+      return <NextStepCard day={t.day} />;
+    case 'yo':
+      return <PartsCard t={t} />;
+    case 'prio':
+      return <AgendaPrioritiesCard day={t.day} />;
+    case 'hab':
+      return <HabitsCard t={t} />;
+    case 'plata':
+      return <MoneyCard t={t} />;
+    case 'trab':
+      return t.works ? <WorkLinkCard t={t} /> : null;
+    case 'pan':
+      return t.on.has('biblia') ? <BibleCard t={t} /> : null;
+    case 'diario':
+      return t.on.has('diario') || t.on.has('gratitud') ? <JournalCard t={t} /> : null;
+    case 'zen':
+      return <ZenCard day={t.day} />;
+    case 'resp':
+      return <BreathCard day={t.day} />;
+    case 'medit':
+      return <MeditationCard day={t.day} />;
+    case 'sug':
+      return t.suggestion && t.isToday ? (
+        <SuggestionCard suggestion={t.suggestion} neuron={t.neurons.find((n) => n.code === t.suggestion?.code)} onLater={t.skipSuggestion} onOpen={() => t.suggestion && openSheet(t.suggestion.code)} />
+      ) : null;
+    default:
+      return key.startsWith('mod:') && MODULES[key.slice(4)] ? <ModuleHomeCard def={MODULES[key.slice(4)]} today={t.day} /> : null;
+  }
 }
 
 export default function HoyScreen() {
   const { colors, mode } = useTheme();
-  const t = useToday();
+  const [viewDay, setViewDay] = useState<string | undefined>(undefined);
+  const t = useToday(viewDay);
   const [sheet, setSheet] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [layout, saveLayout, customized] = usePref<{ order: string[] }>('inicio', { order: [] });
   const work = mode === 'work';
-  const date = `${DAYS[t.now.getDay()]} ${t.now.getDate()} de ${MONTHS[t.now.getMonth()]}`;
+  const d = new Date(`${t.day}T12:00:00`);
+  const date = `${DAYS[d.getDay()]} ${d.getDate()} de ${MONTHS[d.getMonth()]}`;
   const neuron = sheet ? (t.neurons.find((n) => n.code === sheet) ?? null) : null;
+  const order = customized && layout.order.length ? layout.order : defaultOrder(t);
+  const go = (n: number) => {
+    tap();
+    const next = addDays(t.day, n);
+    setViewDay(next === t.realToday ? undefined : next);
+  };
 
   const body: ReactNode[] = work
     ? t.works
-      ? [<JornadaCard key="j" t={t} />, <WorkLineCard key="l" t={t} />, <WorkTasksCard key="w" t={t} />]
+      ? [
+          <JornadaCard key="j" t={t} />,
+          <WorkLineCard key="l" t={t} />,
+          <WorkTasksCard key="w" t={t} />,
+          <Button key="m" label="Mis trabajos y su calendario" kind="secondary" onPress={() => router.navigate('/trabajo')} />,
+        ]
       : [
           <AppText key="n" muted>
             En Conocerte no elegiste un oficio. Cuando agregues tu trabajo, aquí tendrás tu jornada en modo foco.
           </AppText>,
+          <Button key="m" label="Agregar mi trabajo" onPress={() => router.navigate('/trabajo')} />,
         ]
-    : personalCards(t, setSheet);
+    : order.map((k) => cardFor(k, t, setSheet));
 
   return (
     <Screen>
       <SpaceTopBar pip={!work && !!t.suggestion} />
-      <View style={{ gap: 4 }}>
-        <AppText variant="caption" muted style={{ letterSpacing: 1.6 }}>
-          {`${work ? 'TRABAJO · MODO FOCO' : 'PERSONAL'} · ${date.toUpperCase()}`}
-        </AppText>
-        <AppText variant="title">{work ? (t.trade?.name ?? 'Trabajo') : `${greeting(t.now)}${t.name ? `, ${t.name}` : ''}`}</AppText>
+      <View style={{ gap: 6 }}>
+        <View style={styles.dateRow}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Día anterior" onPress={() => go(-1)} hitSlop={8} style={[styles.arrow, { backgroundColor: colors.surface }]}>
+            <CaretLeftIcon size={16} color={colors.text} />
+          </Pressable>
+          <AppText variant="caption" muted style={{ letterSpacing: 1.4, flex: 1, textAlign: 'center' }}>
+            {`${work ? 'TRABAJO · ' : ''}${t.isToday ? 'HOY · ' : ''}${date.toUpperCase()}`}
+          </AppText>
+          <Pressable accessibilityRole="button" accessibilityLabel="Día siguiente" onPress={() => go(1)} hitSlop={8} style={[styles.arrow, { backgroundColor: colors.surface }]}>
+            <CaretRightIcon size={16} color={colors.text} />
+          </Pressable>
+        </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <AppText variant="title" style={{ flex: 1 }}>
+            {work ? (t.trade?.name ?? 'Trabajo') : t.isToday ? `${greeting(t.now)}${t.name ? `, ${t.name}` : ''}` : t.day < t.realToday ? 'Así fue tu día' : 'Lo que viene'}
+          </AppText>
+          {!t.isToday ? (
+            <Pressable accessibilityRole="button" onPress={() => setViewDay(undefined)} style={[styles.today, { backgroundColor: colors.accent }]}>
+              <AppText variant="label" style={{ fontSize: 13 }} color={colors.onAccent}>
+                Volver a hoy
+              </AppText>
+            </Pressable>
+          ) : null}
+        </View>
       </View>
-      {/* La clave por espacio vuelve a animar las tarjetas al cruzar. */}
-      <View key={mode} style={{ gap: 12 }}>
+      {/* La clave por espacio y día vuelve a animar las tarjetas al cruzar o cambiar de día. */}
+      <View key={`${mode}:${t.day}`} style={{ gap: 12 }}>
         <Stagger>{body}</Stagger>
       </View>
+      {!work ? <Button label="Personalizar inicio" kind="secondary" onPress={() => setEditing(true)} /> : null}
       <PrivateNote />
       <View style={{ height: 8, backgroundColor: colors.bg }} />
       <NeuronSheet neuron={neuron} neurons={t.neurons} synapses={t.synapses} states={t.states} age={null} onClose={() => setSheet(null)} />
+      <LayoutSheet
+        visible={editing}
+        order={order}
+        customized={customized && layout.order.length > 0}
+        onClose={() => setEditing(false)}
+        onSave={(o) => saveLayout({ order: o })}
+      />
     </Screen>
   );
 }
+
+/** Elegir y ordenar las tarjetas de Hoy. */
+function LayoutSheet({ visible, order, customized, onClose, onSave }: { visible: boolean; order: string[]; customized: boolean; onClose: () => void; onSave: (o: string[]) => Promise<void> }) {
+  const { colors } = useTheme();
+  const all = [...Object.keys(CORE), ...Object.keys(MODULES).filter((c) => !OWN_CARD.has(c)).map((c) => `mod:${c}`)];
+  const hidden = all.filter((k) => !order.includes(k));
+  const move = (i: number, d: -1 | 1) => {
+    const j = i + d;
+    if (j < 0 || j >= order.length) return;
+    tap();
+    const next = [...order];
+    [next[i], next[j]] = [next[j], next[i]];
+    onSave(next);
+  };
+  return (
+    <Sheet visible={visible} title="Personalizar inicio" onClose={onClose}>
+      <AppText variant="caption" muted>
+        {customized ? 'Tu orden. Sube, baja o quita tarjetas; abajo están las que puedes sumar.' : 'Ahora manda el orden de Severa (cambia según la hora). Si mueves algo, queda tu orden.'}
+      </AppText>
+      {order.map((k, i) => (
+        <View key={k} style={[styles.row, { borderBottomColor: colors.line }]}>
+          <AppText variant="label" style={{ flex: 1 }}>
+            {labelOf(k)}
+          </AppText>
+          <Pressable accessibilityRole="button" accessibilityLabel={`Subir ${labelOf(k)}`} onPress={() => move(i, -1)} style={[styles.ctl, { backgroundColor: colors.surface2, opacity: i ? 1 : 0.3 }]}>
+            <ArrowUpIcon size={16} color={colors.text} />
+          </Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={`Bajar ${labelOf(k)}`} onPress={() => move(i, 1)} style={[styles.ctl, { backgroundColor: colors.surface2, opacity: i < order.length - 1 ? 1 : 0.3 }]}>
+            <ArrowDownIcon size={16} color={colors.text} />
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Quitar ${labelOf(k)}`}
+            onPress={() => {
+              tap();
+              onSave(order.filter((x) => x !== k));
+            }}
+            style={[styles.ctl, { backgroundColor: colors.surface2 }]}
+          >
+            <XIcon size={16} color={colors.muted} />
+          </Pressable>
+        </View>
+      ))}
+      <AppText variant="caption" muted style={{ fontFamily: fonts.extrabold, letterSpacing: 1.1, fontSize: 10 }}>
+        PARA SUMAR
+      </AppText>
+      <View style={styles.wrap}>
+        {hidden.map((k) => (
+          <Pressable
+            key={k}
+            accessibilityRole="button"
+            onPress={() => {
+              tap();
+              onSave([...order, k]);
+            }}
+            style={[styles.chip, { backgroundColor: colors.surface2 }]}
+          >
+            <PlusIcon size={14} color={colors.accent} />
+            <AppText variant="label" style={{ fontSize: 13 }}>
+              {labelOf(k)}
+            </AppText>
+          </Pressable>
+        ))}
+      </View>
+      {customized ? <Button label="Volver al orden de Severa" kind="link" onPress={() => onSave([])} /> : null}
+    </Sheet>
+  );
+}
+
+const styles = StyleSheet.create({
+  dateRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  arrow: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  today: { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 7 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, borderBottomWidth: StyleSheet.hairlineWidth },
+  ctl: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  chip: { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },
+});

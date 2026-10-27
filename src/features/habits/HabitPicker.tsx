@@ -48,7 +48,7 @@ export function HabitPicker({
   suggestions: HabitSuggestion[];
   chosen: string[];
   onToggle: (s: HabitSuggestion) => void;
-  onCreate: (name: string) => void;
+  onCreate: (name: string, direction: 'good' | 'reduce') => void;
 }) {
   const { colors } = useTheme();
   const [q, setQ] = useState('');
@@ -65,20 +65,26 @@ export function HabitPicker({
         style={[styles.search, { backgroundColor: colors.surface, color: colors.text }]}
       />
       {query && !exact ? (
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => {
-            tap();
-            onCreate(q.trim());
-            setQ('');
-          }}
-          style={[styles.item, { backgroundColor: colors.accentSoft }]}
-        >
-          <PlusIcon size={18} color={colors.accent} />
-          <AppText variant="label" color={colors.accent} style={{ flex: 1 }}>
-            {`Crear «${q.trim()}»`}
-          </AppText>
-        </Pressable>
+        // Uno propio, para sumar o para bajar (usuario, 26-10-2026: «no puedo agregar hábitos que bajen»).
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          {(['good', 'reduce'] as const).map((dir) => (
+            <Pressable
+              key={dir}
+              accessibilityRole="button"
+              onPress={() => {
+                tap();
+                onCreate(q.trim(), dir);
+                setQ('');
+              }}
+              style={[styles.item, { flex: 1, backgroundColor: dir === 'good' ? colors.accentSoft : colors.midSoft }]}
+            >
+              <PlusIcon size={18} color={dir === 'good' ? colors.accent : colors.mid} />
+              <AppText variant="label" color={dir === 'good' ? colors.accent : colors.mid} style={{ flex: 1 }} numberOfLines={2}>
+                {dir === 'good' ? `«${q.trim()}» para sumar` : `«${q.trim()}» para bajar`}
+              </AppText>
+            </Pressable>
+          ))}
+        </View>
       ) : null}
       {ORDER.map((group) => {
         const items = list.filter((s) => groupOf(s) === group);

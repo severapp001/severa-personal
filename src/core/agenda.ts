@@ -133,7 +133,7 @@ export const REMINDERS: { value: number | null; label: string }[] = [
 ];
 
 // ─── Avisos en el teléfono (P2) ─────────────────────────────────────────────
-export type Reminder = { id: string; at: Date; title: string; body: string };
+export type Reminder = { id: string; at: Date; title: string; body: string; /** Pantalla que abre al tocarlo. */ url?: string };
 
 /** Los avisos de los próximos días: uno por cada vez que ocurre un evento con aviso. Los de todo el
  *  día avisan a las 9:00. Lo de Salud se avisa con un texto neutro (MD4: módulos sensibles). */
@@ -160,10 +160,27 @@ export function upcomingReminders(events: CalendarEvent[], now: Date, days = 14,
   return list.sort((a, b) => a.at.getTime() - b.at.getTime()).slice(0, max);
 }
 
+/** El aviso para cerrar el día (usuario, 27-10-2026: «a una hora fija que elijo»): uno por día de
+ *  los próximos `days`, salvo los días ya cerrados y si esa hora ya pasó. */
+export function closingReminders(hour: string, now: Date, closed: Set<string>, days = 7): Reminder[] {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(hour);
+  if (!m) return [];
+  const today = isoDay(now);
+  const list: Reminder[] = [];
+  for (let i = 0; i < days; i++) {
+    const day = addDays(today, i);
+    if (closed.has(day)) continue;
+    const at = new Date(Number(day.slice(0, 4)), Number(day.slice(5, 7)) - 1, Number(day.slice(8, 10)), Number(m[1]), Number(m[2]));
+    if (at <= now) continue;
+    list.push({ id: `cierre:${day}`, at, title: 'Es hora de cerrar tu día', body: 'Un minuto: cómo estuvo, qué quedó pendiente y lo primero de mañana.', url: '/cierre' });
+  }
+  return list;
+}
+
 // ─── Prioridades del día ────────────────────────────────────────────────────
 export type PriorityItem = {
   key: string;
-  origin: 'task' | PriorityOrigin;
+  origin: 'task' | 'class' | 'goal' | PriorityOrigin;
   originId: string;
   title: string;
   sub: string;
@@ -184,6 +201,10 @@ export type PriorityInput = {
   assessments: { id: string; title: string; course: string | null; due_on: string | null; grade: number | null }[];
   /** Personas a cargo (Familia) con fecha de nacimiento. */
   birthdays: { id: string; name: string; birth_date: string | null }[];
+  /** Las clases del día (Estudios), con su asistencia (26-10-2026). */
+  classes?: { id: string; title: string; time: string | null; done: boolean; hidden?: boolean }[];
+  /** Los pasos de las metas que tocan ese día (27-10-2026, `goalPriorities`). */
+  goals?: { id: string; title: string; goal: string; pos: number; total: number; done: boolean; overdue: string | null }[];
 };
 
 const stateOf = (states: PriorityState[], day: string, origin: PriorityOrigin, id: string) =>
@@ -220,6 +241,25 @@ export function dailyPriorities(input: PriorityInput): PriorityItem[] {
     if (state === 'dismissed') continue;
     const imp = Number((e as { importance?: number | null }).importance) || 0;
     items.push({ ...base, urgent: imp > 0, key: `event:${e.id}`, origin: 'event', originId: e.id, title: `${imp === 2 ? '‼ ' : imp === 1 ? '★ ' : ''}${e.title}`, sub: `${eventTime(e)}${e.location ? ` · ${e.location}` : ''}`, time: hhmm(e.starts_at), done: state === 'done' });
+  }
+
+  for (const c of input.classes ?? []) {
+    if (c.hidden) continue;
+    items.push({ ...base, key: `class:${c.id}`, origin: 'class', originId: c.id, title: `Clase: ${c.title}`, sub: c.time ? `Estudios · ${c.time}` : 'Estudios', time: c.time, done: c.done });
+  }
+
+  for (const g of input.goals ?? []) {
+    items.push({
+      ...base,
+      overdue: !!g.overdue,
+      key: `goal:${g.id}`,
+      origin: 'goal',
+      originId: g.id,
+      title: g.title,
+      sub: g.overdue ? `${g.goal} · atrasado, era para el ${shortDay(g.overdue)}` : `${g.goal} · paso ${g.pos} de ${g.total}`,
+      time: null,
+      done: g.done,
+    });
   }
 
   const tomorrow = addDays(day, 1);

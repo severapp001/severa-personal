@@ -19,7 +19,7 @@ export type Neuron = {
 export type Synapse = { neuron_a: string; neuron_b: string };
 export type Trade = { code: string; name: string; tools: string[]; beta_priority: number | null; status: string; sort_order: number };
 
-export const BASICS = ['perfil_personal', 'calendario', 'prioridades', 'resumen'];
+export const BASICS = ['perfil_personal', 'calendario', 'prioridades', 'resumen', 'cuerpo_mente_alma'];
 
 export const GOALS = [
   { code: 'finanzas', name: 'Ordenar mis finanzas', detail: 'Sueldo, gastos y deudas', plan: 'finanzas' },
@@ -271,5 +271,7 @@ export function layoutBrain(neurons: Neuron[]): Record<string, { x: number; y: n
     });
   }
   for (const n of neurons) if (n.hemisphere === 'bridge') pos[n.code] = { x: 175, y: 262 };
+  // Cuerpo, mente y alma (26-10-2026) va al centro, entre los dos hemisferios: es la persona.
+  if (pos.cuerpo_mente_alma) pos.cuerpo_mente_alma = { x: 175, y: 145 };
   return pos;
 }

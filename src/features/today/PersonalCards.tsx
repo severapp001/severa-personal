@@ -2,9 +2,9 @@ import { router } from 'expo-router';
 import { useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
-import { continueFrom, progress, verseOfDay } from '@/core/bible';
+import { progress, randomVerse, verseOfDay } from '@/core/bible';
 import { incomeStatement, monthKey } from '@/core/finance';
-import { dayEntry, MOODS } from '@/core/journal';
+import { dayEntry } from '@/core/journal';
 import { displayAmount } from '@/core/money';
 import { streak } from '@/core/modules';
 import { daysToPayday, fmtTime, nextItem, type PaydayAnswer } from '@/core/today';
@@ -14,9 +14,10 @@ import { useEntries } from '@/data/entries';
 import { useFinance } from '@/data/finance';
 import { useJournal } from '@/data/journal';
 import { useHabits } from '@/data/modules';
-import { useMoodColor } from '@/features/journal/useMoodColor';
 import { useAmountVisibility } from '@/features/privacy/useAmountVisibility';
 import { AgendaSheet, type AgendaTarget } from '@/features/agenda/AgendaSheet';
+import { CLOSING_DEFAULT } from '@/features/notifications/useReminders';
+import { usePref } from '@/features/space/usePref';
 import { useCross } from '@/features/space/SpaceCross';
 import { worksOn } from '@/features/work/jobs';
 import { useWork } from './WorkToday';
@@ -24,7 +25,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { fonts, radius, space } from '@/theme/tokens';
 import { AppText, Button, EyeButton } from '@/ui';
 import { tap } from '@/ui/haptics';
-import { BookOpenIcon, CalendarPlusIcon, CheckIcon, ListChecksIcon, LockIcon, PencilSimpleIcon, PlusIcon } from '@/ui/icons';
+import { BookOpenIcon, CalendarPlusIcon, CheckIcon, ListChecksIcon, LockIcon, PlusIcon } from '@/ui/icons';
 import { DayLineCompact } from './DayLine';
 import type { Today } from './useToday';
 
@@ -72,8 +73,9 @@ export function DayCard({ t, onSeeAll }: { t: Today; onSeeAll: () => void }) {
   const { colors } = useTheme();
   const agenda = useAgenda(t.day, t.day);
   const [target, setTarget] = useState<AgendaTarget | null>(null);
-  const doneCount = t.items.filter((it) => t.done(it.id)).length;
-  const next = nextItem(t.items, t.nowMin, t.done);
+  const all = [...t.items, ...t.flexible];
+  const doneCount = all.filter((it) => t.done(it.id)).length;
+  const next = nextItem(t.items, t.nowMin, t.done) ?? t.flexible.find((it) => !t.done(it.id)) ?? null;
   // Agregar desde Hoy (usuario, 26-10-2026: «falta un agregar evento en el inicio»).
   const add = (kind: 'event' | 'task', label: string, Icon: typeof CalendarPlusIcon) => (
     <Pressable
@@ -89,10 +91,12 @@ export function DayCard({ t, onSeeAll }: { t: Today; onSeeAll: () => void }) {
       <Icon size={18} color={colors.accent} />
     </Pressable>
   );
+  const left = all.length - doneCount;
+  const title = next ? (next.flexible ? `Pendiente: ${next.title}` : `${t.isToday ? 'Sigue' : 'A las'} ${fmtTime(next.t)}: ${next.title}`) : left ? `${left} sin marcar` : 'Todo listo';
   return (
     <Card
-      kicker={`Tu día · ${doneCount} de ${t.items.length} hechas`}
-      title={next ? `Sigue a las ${fmtTime(next.t)}: ${next.title}` : 'Todo listo por hoy'}
+      kicker={`${t.isToday ? 'Tu día' : 'Ese día'} · ${doneCount} de ${all.length} hechas`}
+      title={title}
       right={
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           {add('event', 'Agregar evento', CalendarPlusIcon)}
@@ -103,7 +107,41 @@ export function DayCard({ t, onSeeAll }: { t: Today; onSeeAll: () => void }) {
         </View>
       }
     >
-      <DayLineCompact items={t.items} now={t.nowMin} done={t.done} onToggle={t.toggleDone} />
+      {t.items.length ? <DayLineCompact items={t.items} now={t.nowMin} done={t.done} onToggle={t.toggleDone} /> : null}
+      {t.flexible.length ? (
+        <View style={{ gap: 6 }}>
+          <AppText variant="caption" muted style={styles.kicker}>
+            DURANTE EL DÍA · SIN HORA
+          </AppText>
+          <View style={styles.flexRow}>
+            {t.flexible.map((it) => {
+              const on = t.done(it.id);
+              return (
+                <Pressable
+                  key={it.id}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: on }}
+                  onPress={() => {
+                    tap();
+                    t.toggleDone(it.id);
+                  }}
+                  style={[styles.flexChip, { backgroundColor: on ? colors.okSoft : colors.surface2 }]}
+                >
+                  {on ? <CheckIcon size={14} weight="bold" color={colors.ok} /> : null}
+                  <AppText variant="label" style={{ fontSize: 13, textDecorationLine: on ? 'line-through' : 'none' }} color={on ? colors.ok : colors.text}>
+                    {it.title}
+                  </AppText>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+      ) : null}
+      <Pressable accessibilityRole="switch" accessibilityState={{ checked: t.variable }} onPress={() => t.setVariable(!t.variable)} hitSlop={6}>
+        <AppText variant="caption" color={colors.muted}>
+          {t.variable ? '✓ Mi horario cambia cada día (sin despertar ni dormir fijos) · cambiar' : '¿Tu horario cambia cada día? Toca aquí y quedan sin hora'}
+        </AppText>
+      </Pressable>
       <AgendaSheet agenda={agenda} target={target} day={t.day} onClose={() => setTarget(null)} />
     </Card>
   );
@@ -235,10 +273,13 @@ export function WorkLinkCard({ t }: { t: Today }) {
   );
 }
 
-// Pan de vida (25-10-2026): un versículo distinto cada día. Desde el 26-10-2026 (usuario): tocarlo
-// abre ese versículo para leer el anterior y el siguiente; arriba, «Leer» sigue donde quedaste;
-// abajo, la barra de avance y la racha (🔥). Marcarlo como leído cuenta para la racha y completa
-// el Pan de vida de tu día y el hábito de la Biblia, si lo tienes.
+// Pan de vida (25-10-2026): un versículo distinto cada día. 26-10-2026 (usuario): tocarlo abre ese
+// versículo; arriba, «Leer» sigue donde quedaste; abajo, la barra de avance y la racha (🔥). Al
+// marcarlo, el Pan de vida del día queda hecho (y el hábito de la Biblia, si lo tienes) y aparece
+// otro versículo al azar para seguir; «Otro» trae uno más.
+type Ref = { book: string; chapter: number; verse: number };
+const refKey = (v: Ref) => `${v.book} ${v.chapter}:${v.verse}`;
+
 export function BibleCard({ t }: { t: Today }) {
   const { colors } = useTheme();
   const done = t.done('pan');
@@ -246,47 +287,77 @@ export function BibleCard({ t }: { t: Today }) {
   const notes = useBibleNotes();
   const log = useEntries('biblia');
   const habits = useHabits(t.day);
-  const v = verseOfDay(t.day);
+  const daily = verseOfDay(t.day);
+  const [extra, setExtra] = useState<Ref | null>(null);
+  const [seen, setSeen] = useState<string[]>([]);
+  const v = extra ?? daily;
   const { verses, loading } = useChapter(v.book, v.chapter);
   const text = verses.find((x) => x.verse === v.verse)?.body;
   const name = (code: string) => books.find((b) => b.code === code)?.name ?? '';
-  const next = continueFrom(books, notes.reads);
   const prog = progress(notes.reads);
   const days = new Set([...notes.reads.map((r) => String(r.read_on).slice(0, 10)), ...log.entries.filter((e) => e.kind === 'pan' || e.kind === 'lectura').map((e) => e.day ?? '')]);
   const racha = streak(days, t.day);
   const bibleHabit = habits.habits.find((h) => /biblia|pan de vida/i.test(h.name));
+  const another = () => {
+    tap();
+    const next = randomVerse([refKey(daily), refKey(v), ...seen]);
+    setSeen((list) => [...list, refKey(v)].slice(-40));
+    setExtra(next);
+  };
   const toggle = async () => {
     tap();
     await t.toggleDone('pan');
     const mine = log.of('pan').find((e) => e.day === t.day);
     if (done) {
+      setExtra(null);
       if (mine) await log.remove(mine.id);
-    } else {
-      if (!mine) await log.add({ kind: 'pan', day: t.day, title: `${v.book} ${v.chapter}:${v.verse}` });
-      if (bibleHabit && habits.countFor(bibleHabit.id) < (Number(bibleHabit.daily_target) || 1)) await habits.log(bibleHabit.id, 1);
+      return;
     }
+    if (!mine) await log.add({ kind: 'pan', day: t.day, title: refKey(daily) });
+    if (bibleHabit && habits.countFor(bibleHabit.id) < (Number(bibleHabit.daily_target) || 1)) await habits.log(bibleHabit.id, 1);
+    setExtra(randomVerse([refKey(daily), ...seen]));
   };
   const open = () => router.push({ pathname: '/biblia', params: { libro: v.book, cap: String(v.chapter), v: String(v.verse) } });
   return (
     <Card
-      kicker={`Pan de vida · ${name(v.book)} ${v.chapter}:${v.verse}`}
+      kicker={done ? `Pan de vida ✓ · ${extra ? 'otro para ti' : 'de hoy'}` : `Pan de vida · ${name(v.book)} ${v.chapter}:${v.verse}`}
+      kickerColor={done ? colors.ok : undefined}
       right={
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <Pressable accessibilityRole="button" accessibilityLabel={`Leer la Biblia: ${name(next.book)} ${next.chapter}`} onPress={() => router.push('/biblia')} style={[styles.readBtn, { backgroundColor: colors.surface2 }]}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Leer la Biblia" onPress={() => router.push('/biblia')} style={[styles.readBtn, { backgroundColor: colors.surface2 }]}>
             <BookOpenIcon size={16} color={colors.accent} />
             <AppText variant="label" style={{ fontSize: 13 }} color={colors.accent}>
               Leer
             </AppText>
           </Pressable>
-          <Check on={done} label="Pan de vida leído" onPress={toggle} />
+          {done ? null : <Check on={done} label="Pan de vida leído" onPress={toggle} />}
         </View>
       }
     >
       <Pressable accessibilityRole="button" accessibilityHint="Abre el versículo para seguir leyendo" onPress={open}>
         <AppText style={{ fontSize: 19, lineHeight: 27, fontFamily: fonts.semibold }}>
-          {text ? `«${text}»` : loading ? '…' : 'Abre la Biblia con conexión para ver el versículo de hoy.'}
+          {text ? `«${text}»` : loading ? '…' : 'Abre la Biblia con conexión para ver el versículo.'}
         </AppText>
+        {done ? (
+          <AppText variant="caption" muted style={{ marginTop: 4 }}>
+            {`${name(v.book)} ${v.chapter}:${v.verse}`}
+          </AppText>
+        ) : null}
       </Pressable>
+      {done ? (
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <Pressable accessibilityRole="button" onPress={another} style={[styles.pill, { backgroundColor: colors.surface2 }]}>
+            <AppText variant="label" style={{ fontSize: 13 }}>
+              Otro versículo
+            </AppText>
+          </Pressable>
+          <Pressable accessibilityRole="button" onPress={toggle} style={[styles.pill, { backgroundColor: 'transparent' }]}>
+            <AppText variant="caption" muted>
+              Desmarcar
+            </AppText>
+          </Pressable>
+        </View>
+      ) : null}
       <View style={{ gap: 6 }}>
         <View style={styles.line}>
           <AppText variant="caption" muted style={{ flex: 1 }}>
@@ -304,69 +375,27 @@ export function BibleCard({ t }: { t: Today }) {
   );
 }
 
-// Desde el 25-10-2026 el ánimo y el cierre del día se guardan en el Diario (journal_days).
-export function JournalCard({ t, night }: { t: Today; night: boolean }) {
+// Desde el 25-10-2026 el ánimo y el cierre del día se guardan en el Diario (journal_days). Desde el
+// 27-10 (usuario: «podría aparecer realmente al terminar el día») la tarjeta sale recién a la hora
+// del aviso que eligió la persona y lleva a «Cerrar el día», paso a paso.
+export function JournalCard({ t }: { t: Today }) {
   const { colors } = useTheme();
   const j = useJournal();
-  const moodColor = useMoodColor();
+  const [closing] = usePref('cierre', CLOSING_DEFAULT);
   const entry = dayEntry(j.days, t.day);
-  const close = t.items.find((i) => i.id === 'cierre');
-  if (!night && !entry) {
-    return (
-      <Card
-        kicker="Diario"
-        title="Esta noche cierras tu día"
-        right={
-          <Pressable accessibilityRole="button" accessibilityLabel="Abrir el diario" hitSlop={8} onPress={() => router.push('/diario')}>
-            <PencilSimpleIcon size={22} color={colors.muted} />
-          </Pressable>
-        }
-      >
-        <AppText variant="caption" muted>
-          {close ? `A las ${fmtTime(close.t)} · toma un minuto` : 'Toma un minuto'}
-        </AppText>
-      </Card>
-    );
-  }
-  // Día cerrado: la tarjeta sale de Hoy (usuario, 26-10-2026); en el Diario se sigue editando.
-  if (entry?.closed) return null;
-  const mood = entry?.mood ?? null;
+  const [h, m] = String(closing.hora).split(':').map(Number);
+  const due = t.isToday && t.now.getHours() * 60 + t.now.getMinutes() >= (h || 0) * 60 + (m || 0);
+  if (!due || entry?.closed) return null;
   return (
-    <View style={[styles.card, styles.compact, { backgroundColor: colors.surface }]}>
-      <View style={styles.head}>
-        <AppText variant="caption" color={colors.muted} style={[styles.kicker, { flex: 1 }]}>
-          CERRAR EL DÍA · ¿CÓMO ESTUVO?
-        </AppText>
-        <AppText variant="label" color={colors.accent} onPress={() => router.push('/diario')}>
-          Escribir
-        </AppText>
-      </View>
-      <View style={styles.moods}>
-        {MOODS.map((m) => {
-          const on = mood === m.value;
-          return (
-            <Pressable
-              key={m.value}
-              accessibilityRole="radio"
-              accessibilityState={{ checked: on }}
-              onPress={() => {
-                tap();
-                j.saveDay(t.day, { mood: on ? null : m.value });
-              }}
-              style={[styles.mood, { backgroundColor: on ? moodColor(m.value) : colors.surface2 }]}
-            >
-              <AppText variant="label" style={{ fontSize: 12 }} color={on ? colors.onAccent : colors.text}>
-                {m.label}
-              </AppText>
-            </Pressable>
-          );
-        })}
-      </View>
+    <Card kicker={`Cerrar el día · ${closing.hora}`} title="Es hora de cerrar tu día">
+      <AppText variant="caption" muted>
+        Un minuto: cómo estuvo, cómo están tu cuerpo, tu mente y tu alma, lo que quedó pendiente y lo primero de mañana.
+      </AppText>
       <Pressable
         accessibilityRole="button"
         onPress={() => {
           tap();
-          j.saveDay(t.day, { closed: true });
+          router.push('/cierre');
         }}
         style={[styles.closeDay, { backgroundColor: colors.accent }]}
       >
@@ -375,7 +404,7 @@ export function JournalCard({ t, night }: { t: Today; night: boolean }) {
           Cerrar el día
         </AppText>
       </Pressable>
-    </View>
+    </Card>
   );
 }
 
@@ -402,12 +431,12 @@ const styles = StyleSheet.create({
   dot: { width: 11, height: 11, borderRadius: 6 },
   add: { width: 40, height: 40, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
   reduce: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: space.sm },
-  moods: { flexDirection: 'row', gap: 6 },
-  mood: { flex: 1, borderRadius: 12, paddingVertical: 9, alignItems: 'center' },
-  compact: { padding: space.md, gap: space.sm },
   mini: { width: 34, height: 34, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  flexRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  flexChip: { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },
   readBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 999, paddingHorizontal: 11, paddingVertical: 7 },
   track: { height: 6, borderRadius: 3, overflow: 'hidden' },
+  pill: { borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8 },
   closeDay: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: radius.md, paddingVertical: 11 },
   note: { flexDirection: 'row', alignItems: 'center', gap: 6, justifyContent: 'center', paddingVertical: space.sm },
 });

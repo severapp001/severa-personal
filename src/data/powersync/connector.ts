@@ -12,9 +12,9 @@ export const powerSyncUrl = process.env.EXPO_PUBLIC_POWERSYNC_URL ?? '';
 // Tablas cuya llave en el servidor no se llama «id».
 const PRIMARY_KEY: Record<string, string> = { user_preferences: 'account_id', onboarding_answers: 'account_id' };
 
-// Columnas jsonb: en el teléfono son texto y al subir vuelven a ser objeto (si no, quedarían
-// guardadas como un texto JSON dentro de la columna).
-const JSON_COLUMNS: Record<string, string[]> = { onboarding_answers: ['answers'] };
+// Columnas jsonb y listas (text[]): en el teléfono son texto y al subir vuelven a ser objeto o
+// lista (si no, quedarían guardadas como un texto JSON dentro de la columna).
+const JSON_COLUMNS: Record<string, string[]> = { onboarding_answers: ['answers', 'trades'] };
 
 function withJson(table: string, data: Record<string, unknown>): Record<string, unknown> {
   const cols = JSON_COLUMNS[table];

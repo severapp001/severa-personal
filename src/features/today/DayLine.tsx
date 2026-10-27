@@ -136,10 +136,12 @@ function Pill({ text, bg, fg }: { text: string; bg: string; fg: string }) {
 export function DayLineCompact({ items, now, done, onToggle }: Props) {
   const scroll = useRef<ScrollView>(null);
   const before = items.filter((it) => it.t <= now).length;
+  // La línea «ahora» solo el día de hoy (en un día pasado `now` es 1440 y en uno futuro, -1).
+  const showNow = now >= 0 && now < 1440;
   return (
     <ScrollView
       ref={scroll}
-      style={{ height: ROW * 3.6 }}
+      style={{ maxHeight: ROW * 3.6 }}
       nestedScrollEnabled
       showsVerticalScrollIndicator={false}
       snapToInterval={ROW}
@@ -147,11 +149,11 @@ export function DayLineCompact({ items, now, done, onToggle }: Props) {
     >
       {items.map((it, i) => (
         <View key={it.id}>
-          {i === before ? <NowRow now={now} /> : null}
+          {showNow && i === before ? <NowRow now={now} /> : null}
           <CompactRow item={it} now={now} done={done} onToggle={onToggle} />
         </View>
       ))}
-      {before === items.length ? <NowRow now={now} /> : null}
+      {showNow && before === items.length ? <NowRow now={now} /> : null}
     </ScrollView>
   );
 }
@@ -170,7 +172,7 @@ export function DayLineFull({ items, now, done, onToggle }: Props) {
         const height = it.end ? Math.min(150, Math.max(64, ((it.end - it.t) / 60) * 30)) : 48;
         return (
           <View key={it.id}>
-            {i === before ? <NowRow now={now} /> : i > 0 ? <View style={[styles.gap, { borderColor: colors.line }]} /> : null}
+            {now >= 0 && now < 1440 && i === before ? <NowRow now={now} /> : i > 0 ? <View style={[styles.gap, { borderColor: colors.line }]} /> : null}
             <View style={styles.fullRow}>
               <AppText variant="caption" muted style={[styles.time, { paddingTop: 14 }]}>
                 {fmtTime(it.t)}
@@ -203,7 +205,7 @@ export function DayLineFull({ items, now, done, onToggle }: Props) {
           </View>
         );
       })}
-      {before === items.length ? <NowRow now={now} /> : null}
+      {now >= 0 && now < 1440 && before === items.length ? <NowRow now={now} /> : null}
     </View>
   );
 }

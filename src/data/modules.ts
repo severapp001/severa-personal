@@ -150,3 +150,10 @@ export function useHabits(day: string) {
     },
   };
 }
+
+/** Lo contado de un hábito desde `from` (para su racha y su mapa del mes). */
+export function useHabitHistory(habitId: string | null, from: string) {
+  const space = usePersonalSpace();
+  const logs = useRecords<HabitLog>('habit_logs', space, 'day', 'habit_id = ? AND day >= ?', [habitId ?? '', from]);
+  return logs.filter((l) => l.habit_id === habitId && l.day >= from);
+}

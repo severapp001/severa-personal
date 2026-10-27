@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { addDays } from '@/core/agenda';
-import { courseAverage, daysUntil, neededGrade, upcoming, WEEKDAYS } from '@/core/studies';
+import { courseAverage, daysUntil, isoWeekday, neededGrade, upcoming, WEEKDAYS } from '@/core/studies';
 import { useAgenda } from '@/data/agenda';
 import { useEntries, type Entry } from '@/data/entries';
 import { useStudies, type Course } from '@/data/modules';
@@ -50,6 +50,8 @@ export default function EstudiosScreen() {
   const { colors } = useTheme();
   const s = useStudies();
   const programs = useEntries('estudios');
+  // Asistencia: las clases marcadas en Tu día, el Calendario o Prioridades («clase:<bloque>»).
+  const marks = useEntries('hoy').of('hecho');
   const agenda = useAgenda(todayIso(), todayIso());
   const [tab, setTab] = useState<Tab>('courses');
   const [open, setOpen] = useState<string | null>(null);
@@ -74,6 +76,14 @@ export default function EstudiosScreen() {
     const need = neededGrade(list, pass);
     const expanded = open === c.id;
     const blocks = s.blocks.filter((b) => b.course_id === c.id).sort((a, b) => a.weekday - b.weekday || a.starts_at.localeCompare(b.starts_at));
+    const program = progs.find((p) => p.id === c.program_id);
+    const from = program?.day ?? addDays(today, -56);
+    const held = (() => {
+      let n = 0;
+      for (let d = from; d <= today && n < 400; d = addDays(d, 1)) n += blocks.filter((b) => Number(b.weekday) === isoWeekday(d)).length;
+      return n;
+    })();
+    const went = marks.filter((m) => m.day && m.day >= from && blocks.some((b) => m.title === `clase:${b.id}`)).length;
     return (
       <Panel key={c.id}>
         <Pressable onPress={() => setOpen(expanded ? null : c.id)} onLongPress={() => confirmDelete('study_courses', c.id, `el ramo ${c.name}`)} style={styles.head}>
@@ -89,6 +99,7 @@ export default function EstudiosScreen() {
             </AppText>
           </View>
         </Pressable>
+        {held ? <AppText variant="caption" muted>{`Asistencia: ${went} de ${held} clases${program?.day ? '' : ' (últimas 8 semanas)'}. Se marca en Tu día, el Calendario o Prioridades.`}</AppText> : null}
         {need ? (
           <AppText variant="caption" color={need.possible ? colors.text : colors.bad}>
             {need.possible ? `Necesitas un ${fmtGrade(need.grade)} en lo que queda para aprobar.` : `Con lo que queda ya no alcanza el ${fmtGrade(pass)}. Habla con tu profesor o profesora.`}
