@@ -20,6 +20,7 @@ import ZenScreen from '@/app/(personal)/zen';
 import RespiracionScreen from '@/app/(personal)/respiracion';
 import MeditacionScreen from '@/app/(personal)/meditacion';
 import CierreScreen from '@/app/(personal)/cierre';
+import AjustesScreen from '@/app/(personal)/(tabs)/ajustes';
 import { RoutineScreen } from '@/features/routine/RoutineScreen';
 import { IntroOverlay } from '@/features/welcome/IntroOverlay';
 import { LiveBrain } from '@/features/discovery/LiveBrain';
@@ -80,6 +81,7 @@ function Preview() {
     Respiración: <RespiracionScreen />,
     Meditación: <MeditacionScreen />,
     'Cerrar el día': <CierreScreen />,
+    Ajustes: <AjustesScreen />,
     'Tu rutina (pantalla nueva)': <RoutineScreen />,
     Resumen: <ResumenScreen />,
     Perfil: <PerfilScreen />,

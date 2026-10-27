@@ -3,18 +3,20 @@ import { StyleSheet, Switch, View } from 'react-native';
 import { useAuth } from '@/data/auth';
 import { usePreferences } from '@/data/preferences';
 import { SyncStatus } from '@/features/sync/SyncStatus';
+import { TelegramCard } from '@/features/telegram/TelegramCard';
 import { useTheme } from '@/theme/ThemeProvider';
 import { themeNames, type ThemeKey } from '@/theme/tokens';
 import { AppText, Button, Screen } from '@/ui';
 
-// Ajustes: tema y su par de Trabajo (A1), montos ocultos (H3), sincronización y la cuenta.
+// Ajustes: tema y su par de Trabajo (A1), montos ocultos (H3), sincronización, Telegram (27-10-2026)
+// y la cuenta, con el correo con que se entró (27-10: en la web se entró con otra cuenta sin notarlo).
 
 const THEMES: ThemeKey[] = ['gold', 'dark', 'blue', 'light', 'pink'];
 
 export default function AjustesScreen() {
   const { colors, theme, mode, workTheme, setWorkTheme } = useTheme();
   const { hideAmounts, setHideAmounts, setTheme } = usePreferences();
-  const { signOut, redoOnboarding } = useAuth();
+  const { session, signOut, redoOnboarding } = useAuth();
   const card = [styles.card, { backgroundColor: colors.surface }];
 
   const row = (label: string, value: boolean, onChange: (v: boolean) => void) => (
@@ -47,8 +49,15 @@ export default function AjustesScreen() {
 
       <SyncStatus />
 
+      <TelegramCard />
+
       <View style={card}>
-        <AppText variant="subtitle">Beta</AppText>
+        <AppText variant="subtitle">Tu cuenta</AppText>
+        {session?.user.email ? (
+          <AppText variant="caption" muted>
+            {`Entraste con ${session.user.email}. Usa el mismo correo en el teléfono y en la web para ver los mismos datos.`}
+          </AppText>
+        ) : null}
         <Button label="Repetir Conocerte" kind="secondary" onPress={redoOnboarding} />
         <Button label="Salir" kind="link" onPress={signOut} />
       </View>

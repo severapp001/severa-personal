@@ -71,7 +71,9 @@
     "start:dev": "expo start --dev-client --tunnel",
     "build:apk": "eas build --profile preview --platform android",
     "update": "eas update --channel preview --environment preview",
-    "web:deploy": "node web/deploy.js"
+    "web:deploy": "node web/deploy.js",
+    "bot:core": "node scripts/bot-core.js",
+    "bot:deploy": "node scripts/bot-core.js && supabase functions deploy telegram --use-api --no-verify-jwt --project-ref hcwmbeokrcagrqbhvkoa"
   },
   "private": true,
   "jest": {
