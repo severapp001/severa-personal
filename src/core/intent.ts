@@ -42,21 +42,46 @@ const cap = (s: string) => (s ? s[0].toUpperCase() + s.slice(1) : s);
 
 const STOP = new Set(['en', 'el', 'la', 'los', 'las', 'de', 'del', 'un', 'una', 'por', 'para', 'con', 'y', 'mi', 'mis', 'me', 'al', 'a', 'que', 'se', 'lo', 'le']);
 
+// Los números que son parte de lo dicho, no un monto ni una fecha (27-10-2026, prueba del usuario:
+// «trotar 5 km» quedaba en «trotar km»): los que van antes de una unidad o después de «unidad», «capítulo»…
+const KEEP_AFTER = /^(km|kms|kilometros?|m|metros?|min|minutos?|hrs?|horas?|veces|paginas?|pags?|capitulos?|kg|kilos?|litros?|lts?|vasos?|series|repeticiones|%)$/;
+const KEEP_BEFORE = new Set(['unidad', 'capitulo', 'tema', 'modulo', 'semana', 'parte', 'nivel', 'clase', 'control', 'prueba', 'certamen', 'guia', 'taller', 'laboratorio', 'numero', 'n']);
+
 /** Lo que queda del texto original (con sus tildes) al sacar los trozos ya leídos (monto, fecha,
- *  hora), las palabras de `drop` y las de relleno. */
+ *  hora), cada uno en su lugar, y las palabras de `drop`. El relleno se quita solo al comienzo y al
+ *  final, para que el título se lea natural («enviar correo a fiscal por suspensión»). */
 function rest(text: string, remove: (string | undefined)[], drop: string[] = []): string {
-  const gone = new Set([...remove.filter((r): r is string => !!r).flatMap((r) => fold(r).split(' ')), ...drop]);
-  return text
+  const words = text
     .replace(/[¿?¡!«»"]/g, ' ')
     .split(/\s+/)
-    .map((w) => w.replace(/[.,;:]+$/, ''))
-    .filter((w) => {
-      const f = fold(w);
-      return f && !gone.has(f) && !STOP.has(f) && !/^\+?\$?[\d.,]+$/.test(f);
-    })
-    .join(' ')
-    .trim();
+    .map((w) => w.replace(/^[(]+|[.,;:)]+$/g, ''))
+    .filter(Boolean);
+  const folded = words.map(fold);
+  const gone = words.map(() => false);
+  for (const r of remove) {
+    if (!r) continue;
+    const seq = fold(r).split(' ').filter(Boolean);
+    for (let i = 0; i + seq.length <= folded.length; i++) {
+      if (seq.every((w, j) => !gone[i + j] && folded[i + j] === w)) {
+        seq.forEach((_, j) => (gone[i + j] = true));
+        break;
+      }
+    }
+  }
+  const dropped = new Set(drop);
+  const kept = words.filter((_, i) => {
+    const f = folded[i];
+    if (!f || gone[i] || dropped.has(f)) return false;
+    if (/^\+?\$?[\d.,]+$/.test(f)) return KEEP_AFTER.test(folded[i + 1] ?? '') || KEEP_BEFORE.has(folded[i - 1] ?? '');
+    return true;
+  });
+  while (kept.length && STOP.has(fold(kept[0]))) kept.shift();
+  while (kept.length && STOP.has(fold(kept[kept.length - 1]))) kept.pop();
+  return kept.join(' ').trim();
 }
+
+/** Palabras de orden que no son parte del título («agrega evento…», «anota una tarea…»). */
+const COMMAND_WORDS = ['agrega', 'agregar', 'agregue', 'agregame', 'anade', 'anadir', 'anademe', 'crea', 'crear', 'creame', 'pon', 'poner', 'ponme', 'registra', 'registrar', 'evento', 'eventos', 'recordatorio', 'nuevo', 'nueva', 'agendame', 'agenda', 'agendar', 'anota', 'anotar', 'anotame'];
 
 // ─── Montos ──────────────────────────────────────────────────────────────────
 const UNIT: Record<string, number> = { luca: 1000, lucas: 1000, luquita: 1000, luquitas: 1000, mil: 1000, k: 1000, gamba: 100, gambas: 100, palo: 1_000_000, palos: 1_000_000, millon: 1_000_000, millones: 1_000_000 };
@@ -174,7 +199,7 @@ const CATEGORY_WORDS: [RegExp, string[]][] = [
 ];
 
 /** Busca una referencia por su nombre (sin tildes) dentro de un texto; gana el nombre más largo. */
-function refByName(refs: Refs, kind: 'category' | 'account' | 'habit', text: string, sub?: string): string | null {
+function refByName(refs: Refs, kind: 'category' | 'account' | 'habit' | 'course', text: string, sub?: string): string | null {
   const t = fold(text);
   let best: { key: string; len: number } | null = null;
   for (const [key, r] of Object.entries(refs)) {
@@ -280,6 +305,8 @@ const INCOME_VERBS = /\b(me pagaron|me pago|cobre|gane|ingreso|me llego|recibi|v
 const MONEY_DROP = ['gaste', 'gasto', 'compre', 'pague', 'eche', 'costo', 'salio', 'pagaron', 'pago', 'cobre', 'gane', 'llego', 'recibi', 'depositaron', 'transfirieron', 'pesos', 'plata', 'debito', 'credito', 'tarjeta', 'efectivo'];
 
 const COURSE_DAY = /\b(lunes|martes|miercoles|jueves|viernes|sabado|domingo)s?\b/;
+const EVAL_WORD = /\b(prueba|examen|control|certamen|solemne|evaluacion|interrogacion|disertacion|entrega|unidad|test|quiz)\b/;
+const EVAL_LABEL: Record<string, string> = { evaluacion: 'Evaluación', interrogacion: 'Interrogación', disertacion: 'Disertación', examen: 'Examen', test: 'Test', quiz: 'Quiz' };
 const COURSE_DAYS = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'];
 const MONTH_WORDS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 const hm = (h: string, m?: string) => {
@@ -383,12 +410,28 @@ function parseClause(clause: string, ctx: Ctx): ToolCall[] {
     if (input) return [{ name: 'crear_ramo', input }];
   }
 
+  // Prueba, control, entrega o unidad de un ramo que ya está en Estudios (27-10-2026, prueba del
+  // usuario: «3 de noviembre prueba de inglés», «el 10 de noviembre se cierra la unidad 5»): va al
+  // ramo (y al Calendario), no como evento suelto. Sin el ramo, sigue como evento de Estudios.
+  if (EVAL_WORD.test(t)) {
+    const course = refByName(ctx.refs, 'course', clause);
+    const due = findDate(clause, ctx.today, true);
+    if (course && due) {
+      const unit = /\bunidad\s+(\d{1,2})\b/.exec(t);
+      const kind = /\b(prueba|examen|control|certamen|solemne|evaluacion|interrogacion|disertacion|entrega|test|quiz)\b(?:\s+(?:n(?:umero|o)?\.?\s*)?(\d{1,2})\b)?/.exec(t);
+      const label = kind ? `${EVAL_LABEL[kind[1]] ?? cap(kind[1])}${kind[2] ? ` ${kind[2]}` : ''}` : 'Prueba';
+      const title = unit ? `${/\b(cierr|cerrad|cerrar)/.test(t) ? 'Cierre unidad' : 'Unidad'} ${unit[1]}` : label;
+      const pct = /(\d{1,3})\s*%/.exec(t);
+      return [{ name: 'crear_evaluacion', input: { ramo: course, titulo: title, fecha: due.date, porcentaje: pct ? Number(pct[1]) : null } }];
+    }
+  }
+
   // Tarea: «tarea pagar la luz», «tengo que…», «hay que…», «recuérdame…».
   if (/^(?:tarea:?|tengo que|hay que|debo|no olvidar|no olvides|no me olvide de|recordar|recuerdame|pendiente:?|anota:?)\s/.test(t)) {
     const body = clause.replace(/^\s*(tarea:?|tengo que|hay que|debo|no olvidar|no olvides|no me olvide de|recordar|recu[eé]rdame|pendiente:?|anota:?)\s+/i, '');
     const date = findDate(body, ctx.today, true);
     const time = date ? findTime(body) : null;
-    const title = rest(body, [date?.raw, time?.raw], ['urgente', 'hrs', 'horas']);
+    const title = rest(body, [date?.raw, time?.raw], ['urgente', 'hrs', ...COMMAND_WORDS]);
     return title ? [{ name: 'crear_tarea', input: { titulo: cap(title), fecha: date?.date ?? null, hora: time?.time ?? null, urgente: /\burgente\b/.test(t) } }] : [];
   }
 
@@ -440,7 +483,7 @@ function parseClause(clause: string, ctx: Ctx): ToolCall[] {
                 : 'personal');
     // El título es lo que queda antes de «avísame…» sin la fecha ni la hora.
     const before = remind ? clause.slice(0, Math.max(0, fold(clause).indexOf(remind[0]))) || clause : clause;
-    const title = rest(before, [when?.raw, time?.raw], ['tengo', 'hay', 'agenda', 'agendar', 'anota', 'anotar', 'hrs', 'horas', 'am', 'pm', 'manana', 'tarde', 'noche', 'todos', 'cada', 'semana', 'mes', 'ano', 'semanal', 'mensual', 'anual']);
+    const title = rest(before, [when?.raw, time?.raw], ['tengo', 'hay', 'hrs', 'am', 'pm', 'todos', 'cada', 'semanal', 'mensual', 'anual', ...COMMAND_WORDS]);
     return [
       {
         name: 'crear_evento',
@@ -459,6 +502,14 @@ function parseClause(clause: string, ctx: Ctx): ToolCall[] {
     const account = hints.account ?? refByName(ctx.refs, 'account', clause) ?? firstAccount(ctx.refs);
     const description = rest(clause, [amount.raw, date?.raw], MONEY_DROP);
     return [{ name: 'registrar_movimiento', input: { tipo: income ? 'ingreso' : 'gasto', monto: amount.amount, fecha: date?.date ?? ctx.today, categoria: category, cuenta: account, descripcion: description || null } }];
+  }
+
+  // Algo para hacer con fecha y sin otra pista (27-10-2026: «trotar 5 km hoy» no se entendía): una
+  // tarea de ese día.
+  const due = findDate(clause, ctx.today, true);
+  if (due && !amount) {
+    const title = rest(clause, [due.raw], COMMAND_WORDS);
+    if (title.length >= 3) return [{ name: 'crear_tarea', input: { titulo: cap(title), fecha: due.date, hora: null, urgente: false } }];
   }
   return [];
 }
@@ -518,7 +569,7 @@ export const HELP = [
   'Y si me enseñas («cuando digo la Copec es bencina»), lo aprendo.',
 ].join('\n');
 
-const WHOLE = new Set(['crear_evento', 'escribir_diario', 'recordar', 'agradecer', 'crear_tarea', 'crear_ramo']);
+const WHOLE = new Set(['crear_evento', 'escribir_diario', 'recordar', 'agradecer', 'crear_tarea', 'crear_ramo', 'crear_evaluacion']);
 
 /** Interpreta un mensaje. Puede traer varias acciones («almorcé 6 lucas y tomé 2 vasos de agua»). */
 export function parseMessage(text: string, ctx: Ctx, data: IntentData): LocalResult {

@@ -75,6 +75,14 @@ export function useToday(viewDay?: string) {
     ...agenda.tasks
       .filter((x) => x.due_on === day && hhmm(x.due_at) && x.status !== 'dismissed')
       .map((x) => ({ id: `task:${x.id}`, t: toMinutes(hhmm(x.due_at))!, title: x.title, sub: 'Tarea', icon: 'flag' as const })),
+    // Lo de todo el día y las tareas sin hora van a «durante el día» (27-10-2026: la prueba del 3
+    // salía en Prioridades y no en Tu día).
+    ...eventsOn(agenda.events, day)
+      .filter((e) => !hhmm(e.starts_at))
+      .map((e) => ({ id: `ev:${e.id}`, t: 0, title: e.title, sub: 'Todo el día', icon: 'flag' as const, flexible: true })),
+    ...agenda.tasks
+      .filter((x) => x.due_on === day && !hhmm(x.due_at) && x.status !== 'dismissed')
+      .map((x) => ({ id: `task:${x.id}`, t: 0, title: x.title, sub: 'Tarea', icon: 'flag' as const, flexible: true })),
   ];
   // Las clases de hoy (Estudios) y los bloques de Tu rutina también entran a la línea (26-10-2026).
   const studies = useStudies();

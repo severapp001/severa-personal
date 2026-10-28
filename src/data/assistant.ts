@@ -212,6 +212,12 @@ export function useAssistantActions(day: string) {
       case 'agradecer':
         await journal.addGratitude(p.date, p.text);
         return;
+      case 'crear_evaluacion': {
+        // Como en Estudios: la prueba queda en el ramo y en el Calendario como prioridad del día.
+        await studies.addAssessment({ course_id: refs[p.course].id, title: p.title, due_on: p.date, weight: p.weight, grade: null });
+        await agenda.addEvent({ title: `Prueba: ${p.title} · ${refs[p.course].name}`.slice(0, 120), event_date: p.date, starts_at: null, ends_at: null, layer: 'estudios', repeat: 'none', remind_minutes: null, location: null, notes: null, importance: 1, repeat_until: null });
+        return;
+      }
       case 'crear_ramo': {
         // El ramo queda en Estudios con su clase semanal (y en Tu día ese día de la semana).
         const notes = [p.until ? `hasta ${p.until}` : null, p.group === null ? null : p.group ? 'trabajos en grupo' : 'individual', p.evaluations].filter(Boolean).join(' · ');
@@ -227,5 +233,5 @@ export function useAssistantActions(day: string) {
     }
   }
 
-  return { finance, habits, lessons, agenda, journal, execute };
+  return { finance, habits, lessons, agenda, journal, studies, execute };
 }

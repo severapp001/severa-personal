@@ -76,6 +76,7 @@ export const MODULE_ICONS: Record<string, Icon> = {
   respiracion: WindIcon,
   meditacion: FlowerLotusIcon,
   zen: QuotesIcon,
+  salud_mental: BrainIcon,
   trabajo: BriefcaseIcon,
   agenda_y_citas: CalendarCheckIcon,
   cobros_y_boletas: ReceiptIcon,

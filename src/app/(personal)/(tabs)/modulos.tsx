@@ -46,7 +46,8 @@ export default function ModulosScreen() {
   };
   const query = norm(q.trim());
   const match = (n: Neuron) => !query || norm(n.name).includes(query);
-  const sorted = [...t.neurons].sort((a, b) => a.sort_order - b.sort_order);
+  // Terapia es una pestaña de Salud mental desde el 27-10-2026: no se lista aparte.
+  const sorted = [...t.neurons].filter((n) => n.code !== 'terapia').sort((a, b) => a.sort_order - b.sort_order);
   const mine = favs.map((c) => sorted.find((n) => n.code === c)).filter((n): n is Neuron => !!n && match(n));
   const groups = (mode === 'work' ? (['work', 'personal', 'bridge'] as const) : (['bridge', 'personal', 'work'] as const)).map((h) => ({ h, list: sorted.filter((n) => n.hemisphere === h && match(n)) }));
   const neuron = sheet ? (t.neurons.find((n) => n.code === sheet) ?? null) : null;

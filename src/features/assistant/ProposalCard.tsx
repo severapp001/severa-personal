@@ -8,7 +8,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { radius, space } from '@/theme/tokens';
 import { AppText, Button, Notice } from '@/ui';
 import { tap } from '@/ui/haptics';
-import { AmountField, Chips, DateField, Field, Segmented } from '@/ui/kit';
+import { AmountField, ChipRow, Chips, DateField, Field, Segmented } from '@/ui/kit';
 
 // Tarjeta de una propuesta del asistente: Confirmar, Corregir o Cancelar. Nada se guarda sin el
 // visto bueno del usuario, y lo que corrige queda como lección (aprendizaje humano).
@@ -110,7 +110,7 @@ export function ProposalCard({
 
 /** Los campos que se pueden corregir, según la acción. */
 function Editor({ draft, refs, onChange }: { draft: Proposal; refs: Refs; onChange: (p: Proposal) => void }) {
-  const options = (kind: 'category' | 'account' | 'habit', sub?: string) =>
+  const options = (kind: 'category' | 'account' | 'habit' | 'course', sub?: string) =>
     Object.entries(refs)
       .filter(([, r]) => r.kind === kind && (!sub || r.sub === sub))
       .map(([key, r]) => ({ value: key, label: r.name }));
@@ -228,6 +228,15 @@ function Editor({ draft, refs, onChange }: { draft: Proposal; refs: Refs; onChan
             onChange={(v) => onChange({ ...draft, group: v === 'na' ? null : v === 'grupo' })}
           />
           <Field label="Pruebas o trabajos (opcional)" value={draft.evaluations ?? ''} onChangeText={(evaluations) => onChange({ ...draft, evaluations: evaluations || null })} placeholder="Solemne 1 el 20-11, 30 %" />
+        </View>
+      );
+    case 'crear_evaluacion':
+      return (
+        <View style={{ gap: space.md }}>
+          <Field label="Qué es (prueba, control, entrega, unidad…)" value={draft.title} onChangeText={(title) => onChange({ ...draft, title })} />
+          <ChipRow options={options('course')} value={draft.course} onChange={(course) => onChange({ ...draft, course })} />
+          <DateField label="Día" value={draft.date} onChange={(date) => date && onChange({ ...draft, date })} future />
+          <Field label="Porcentaje (opcional)" value={draft.weight ? String(draft.weight) : ''} onChangeText={(v) => onChange({ ...draft, weight: Number(v.replace(/\D/g, '')) || null })} keyboardType="number-pad" />
         </View>
       );
     case 'crear_tarea':

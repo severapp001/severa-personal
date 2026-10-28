@@ -62,7 +62,7 @@ export default function AsistenteScreen() {
   const now = new Date();
   const today = dayKey(now);
   const { conversation, messages } = useChat();
-  const { finance, habits, lessons, agenda, journal, execute } = useAssistantActions(today);
+  const { finance, habits, lessons, agenda, journal, studies, execute } = useAssistantActions(today);
   const { session } = useAuth();
   const onboarding = useOnboarding(session?.user.id);
   const [text, setText] = useState('');
@@ -120,7 +120,7 @@ export default function AsistenteScreen() {
   }
 
   // Modo sin IA: referencias con los datos de ahora y lo necesario para responder preguntas.
-  const localRefs = () => buildRefs({ categories: finance.categories, accounts: finance.accounts, habits: habits.habits });
+  const localRefs = () => buildRefs({ categories: finance.categories, accounts: finance.accounts, habits: habits.habits, courses: studies.courses });
   function intentData(): IntentData {
     const names = new Map(finance.categories.map((c) => [c.id, c.name]));
     const pay = daysToPayday(onboarding?.answers.finanzas as PaydayAnswer, now);
@@ -242,8 +242,8 @@ export default function AsistenteScreen() {
   return (
     <Screen scroll={false}>
       <ModuleHeader
-        kicker="Severa"
-        title="Asistente"
+        kicker="Tu cerebro"
+        title="Severa"
         right={
           <View style={{ flexDirection: 'row', gap: 8 }}>
             <Pressable accessibilityRole="button" accessibilityLabel={`Tus ideas: ${openIdeas}`} onPress={() => setShowIdeas(true)} style={[styles.round, { backgroundColor: colors.surface }]}>

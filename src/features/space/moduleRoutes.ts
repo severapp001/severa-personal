@@ -22,6 +22,9 @@ const OWN: Record<string, Href> = {
   respiracion: '/respiracion',
   meditacion: '/meditacion',
   zen: '/zen',
+  // Terapia vive dentro de Salud mental desde el 27-10-2026 (pedido del usuario).
+  salud_mental: '/salud-mental',
+  terapia: { pathname: '/salud-mental', params: { tab: 'terapia' } },
   resumen: '/resumen',
   logros: '/logros',
   juegos: '/juegos',

@@ -8,17 +8,21 @@ import { scheduleOnRN } from 'react-native-worklets';
 import { layoutBrain } from '@/core/discovery';
 import { LiveBrain } from '@/features/discovery/LiveBrain';
 import { NeuronSheet } from '@/features/discovery/NeuronSheet';
+import { InsightsSheet } from '@/features/stats/InsightsSheet';
 import { useCross } from '@/features/space/SpaceCross';
 import { useToday } from '@/features/today/useToday';
 import { useTheme } from '@/theme/ThemeProvider';
 import { type SpaceMode } from '@/theme/tokens';
 import { AppText, Button, Screen } from '@/ui';
 import { tap } from '@/ui/haptics';
-import { MinusIcon, PlusIcon, CornersOutIcon, XIcon } from '@/ui/icons';
+import { ChatCircleTextIcon, CornersOutIcon, MagnifyingGlassIcon, MinusIcon, PlusIcon, XIcon } from '@/ui/icons';
 
 // El cerebro (A2, vista previa del 17-10-2026; vivo desde el 26-10-2026): Personal a la izquierda y Trabajo a la derecha.
 // Se acerca pellizcando o con + y −, se mueve arrastrando y cada neurona se toca para ver su hoja.
 // Desde aquí se entra a un hemisferio.
+// 27-10-2026 (usuario: «dejar el asistente interno de Severa como el cerebro… y que este cerebro
+// comience a entender y analizar cómo van funcionando las conexiones»): desde el cerebro se conversa
+// con Severa y se ve lo que el cerebro encuentra en tus conexiones.
 
 const W = 350;
 const H = 290;
@@ -39,6 +43,7 @@ export default function CerebroScreen() {
   const [hemi, setHemi] = useState<'all' | SpaceMode>('all');
   const [labels, setLabels] = useState(false);
   const [sheet, setSheet] = useState<string | null>(null);
+  const [insights, setInsights] = useState(false);
 
   const scale = useSharedValue(1);
   const tx = useSharedValue(0);
@@ -218,6 +223,18 @@ export default function CerebroScreen() {
       <AppText variant="caption" muted style={{ textAlign: 'center' }}>
         Pellizca para acercarte y toca una neurona para ver qué es.
       </AppText>
+      <View style={styles.actions}>
+        <Pressable accessibilityRole="button" onPress={() => (tap(), router.push('/asistente'))} style={[styles.action, { backgroundColor: colors.accent }]}>
+          <ChatCircleTextIcon size={20} color={colors.onAccent} />
+          <AppText variant="label" color={colors.onAccent}>
+            Conversar
+          </AppText>
+        </Pressable>
+        <Pressable accessibilityRole="button" onPress={() => (tap(), setInsights(true))} style={[styles.action, { backgroundColor: colors.surface }]}>
+          <MagnifyingGlassIcon size={20} color={colors.accent} />
+          <AppText variant="label">Lo que veo</AppText>
+        </Pressable>
+      </View>
       <Button
         label={target === mode ? `Volver a ${mode === 'work' ? 'Trabajo' : 'Personal'}` : `Entrar a ${target === 'work' ? 'Trabajo' : 'Personal'}`}
         onPress={() => {
@@ -226,6 +243,15 @@ export default function CerebroScreen() {
         }}
       />
       <NeuronSheet neuron={neuron} neurons={t.neurons} synapses={t.synapses} states={t.states} age={null} onClose={() => setSheet(null)} />
+      <InsightsSheet
+        visible={insights}
+        neurons={t.neurons}
+        onClose={() => setInsights(false)}
+        onPick={(code) => {
+          setInsights(false);
+          if (pos[code]) select(code);
+        }}
+      />
     </Screen>
   );
 }
@@ -236,4 +262,6 @@ const styles = StyleSheet.create({
   seg: { flexDirection: 'row', borderRadius: 14, padding: 4, gap: 4 },
   segBtn: { flex: 1, borderRadius: 10, paddingVertical: 9, alignItems: 'center' },
   zoom: { position: 'absolute', right: 0, top: 0, gap: 8 },
+  actions: { flexDirection: 'row', gap: 10 },
+  action: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 16, paddingVertical: 14 },
 });

@@ -12,7 +12,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { fonts } from '@/theme/tokens';
 import { AppText } from '@/ui';
 import { tap } from '@/ui/haptics';
-import { CalendarBlankIcon, ChatCircleTextIcon, HouseIcon, PlusIcon, SquaresFourIcon, type Icon } from '@/ui/icons';
+import { CalendarBlankIcon, HouseIcon, ListChecksIcon, PlusIcon, SquaresFourIcon, type Icon } from '@/ui/icons';
 
 // Barra inferior (sistema de diseño §5). Ajustes queda en el engranaje de arriba. En Trabajo, encima va la barra de hábitos rápidos (A3). El + abre el registro rápido
 // personalizable (QuickPanel).
@@ -23,6 +23,9 @@ import { CalendarBlankIcon, ChatCircleTextIcon, HouseIcon, PlusIcon, SquaresFour
 // 27-10-2026 (usuario: «Metas no me convence del todo… dejaría algo como ideas, quizás el asistente
 // estaría bien»): en su lugar va el Asistente, que también guarda ideas; Metas se abre desde Hoy
 // («Tu próximo paso»), Módulos y Cuerpo, mente y alma. Ya no hace falta su botón flotante.
+// 27-10-2026 (tarde, usuario: «prioridades tiene muy poca relevancia» · «dejar el asistente interno
+// de Severa como el cerebro»): Hoy · Calendario · + · Prioridades · Módulos. El asistente vive en
+// el cerebro (el logo de arriba).
 const TABS: Record<string, { label: string; Icon: Icon }> = {
   index: { label: 'Hoy', Icon: HouseIcon },
   calendario: { label: 'Calendario', Icon: CalendarBlankIcon },
@@ -84,16 +87,16 @@ export function TabBar({ state, navigation, onHeight }: BottomTabBarProps & { on
         </Pressable>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Asistente"
+          accessibilityLabel="Prioridades"
           onPress={() => {
             tap();
-            router.push('/asistente');
+            router.push('/prioridades');
           }}
           style={styles.tab}
         >
-          <ChatCircleTextIcon size={24} color={colors.muted} />
+          <ListChecksIcon size={24} color={colors.muted} />
           <AppText variant="caption" color={colors.muted} style={styles.label}>
-            Asistente
+            Prioridades
           </AppText>
         </Pressable>
         {routes.slice(2).map((r) => tabButton(r.name))}

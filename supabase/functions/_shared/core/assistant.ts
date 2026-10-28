@@ -73,7 +73,7 @@ export function isStale(lastAt: string | null, messageCount: number, now: Date):
 // ─── Contexto ────────────────────────────────────────────────────────────────
 // Referencias cortas (c1, a1, h1) en vez de ids largos: ahorran texto y la IA no puede inventar
 // un id que no existe.
-export type Ref = { kind: 'category' | 'account' | 'habit'; id: string; name: string; sub?: string };
+export type Ref = { kind: 'category' | 'account' | 'habit' | 'course'; id: string; name: string; sub?: string };
 export type Refs = Record<string, Ref>;
 
 export type Lesson = { kind: 'correction' | 'rule'; phrase: string; meaning: string };
@@ -118,8 +118,10 @@ const MOVEMENT_KIND: Record<string, string> = { expense: 'gasto', income: 'ingre
 
 /** Referencias para el modo sin IA: la llave lleva el id, así no cambian aunque aparezcan
  *  categorías o hábitos nuevos a mitad de una conversación. La primera cuenta es la de siempre. */
-export function buildRefs(input: Pick<ContextInput, 'categories' | 'accounts' | 'habits'>): Refs {
+export function buildRefs(input: Pick<ContextInput, 'categories' | 'accounts' | 'habits'> & { courses?: { id: string; name: string; archived?: number | boolean | null }[] }): Refs {
   const refs: Refs = {};
+  // Los ramos de Estudios (27-10-2026): «prueba de inglés el 3» va al ramo, no al calendario suelto.
+  for (const c of (input.courses ?? []).filter((x) => !x.archived)) refs[`r:${c.id}`] = { kind: 'course', id: c.id, name: c.name };
   for (const a of input.accounts.filter((x) => !x.archived)) refs[`a:${a.id}`] = { kind: 'account', id: a.id, name: a.name };
   for (const c of input.categories) refs[`c:${c.id}`] = { kind: 'category', id: c.id, name: c.name, sub: c.kind };
   for (const h of input.habits) refs[`h:${h.id}`] = { kind: 'habit', id: h.id, name: h.name, sub: h.direction };
@@ -231,7 +233,9 @@ export type JournalProposal = { tool: 'escribir_diario'; date: string; mood: num
 export type GratitudeProposal = { tool: 'agradecer'; date: string; text: string };
 /** Un ramo con su clase semanal (26-10-2026): «tengo Ingeniería económica los jueves a las 10:00». */
 export type CourseProposal = { tool: 'crear_ramo'; name: string; weekday: number | null; start: string | null; end: string | null; until: string | null; teacher: string | null; group: boolean | null; evaluations: string | null };
-export type Proposal = MovementProposal | HabitLogProposal | NewHabitProposal | RuleProposal | EventProposal | TaskProposal | JournalProposal | GratitudeProposal | CourseProposal;
+/** Una prueba, control, entrega o unidad de un ramo de Estudios (27-10-2026). */
+export type AssessmentProposal = { tool: 'crear_evaluacion'; course: string; title: string; date: string; weight: number | null };
+export type Proposal = MovementProposal | HabitLogProposal | NewHabitProposal | RuleProposal | EventProposal | TaskProposal | JournalProposal | GratitudeProposal | CourseProposal | AssessmentProposal;
 
 export const WEEKDAY_NAMES = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'];
 
@@ -337,6 +341,12 @@ export function readProposal(name: string, raw: unknown, refs: Refs, today: stri
       const text = str(input.texto)?.slice(0, 500);
       return text ? { tool: name, date: day(input.fecha, today), text } : null;
     }
+    case 'crear_evaluacion': {
+      const course = ref(input.ramo, refs, 'course');
+      if (!course) return null;
+      const weight = int(input.porcentaje);
+      return { tool: name, course, title: str(input.titulo)?.slice(0, 80) ?? 'Prueba', date: day(input.fecha, today), weight: weight > 0 && weight <= 100 ? weight : null };
+    }
     default:
       return null;
   }
@@ -403,6 +413,8 @@ export function describeProposal(p: Proposal, refs: Refs, today: string): { titl
           .filter(Boolean)
           .join(' · '),
       };
+    case 'crear_evaluacion':
+      return { title: `${p.title} · ${refs[p.course]?.name ?? 'Ramo'}`, detail: [dayLabel(p.date, today), p.weight ? `${p.weight} %` : null, 'Estudios y Calendario'].filter(Boolean).join(' · ') };
   }
 }
 
@@ -435,6 +447,8 @@ export function proposalLine(p: Proposal, refs: Refs): string {
       return `gratitud del ${p.date}: «${p.text}»`;
     case 'crear_ramo':
       return `ramo «${p.name}»${p.weekday ? ` los ${WEEKDAY_NAMES[p.weekday - 1]}${p.start ? ` ${hours(p.start, p.end)}` : ''}` : ''}${p.until ? ` hasta el ${p.until}` : ''}`;
+    case 'crear_evaluacion':
+      return `${p.title.toLowerCase()} de ${refs[p.course]?.name ?? 'un ramo'} el ${p.date}${p.weight ? ` (${p.weight} %)` : ''}`;
   }
 }
 

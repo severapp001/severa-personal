@@ -12,6 +12,7 @@ const refs: Refs = {
   a2: { kind: 'account', id: 'credit', name: 'Tarjeta CMR' },
   h1: { kind: 'habit', id: 'water', name: 'Tomar agua', sub: 'good' },
   h2: { kind: 'habit', id: 'smoke', name: 'Cigarros', sub: 'reduce' },
+  r1: { kind: 'course', id: 'english', name: 'Inglés' },
 };
 const today = '2026-10-25'; // domingo
 const ctx = { today, refs, lessons: [] };
@@ -62,7 +63,7 @@ describe('acciones', () => {
     expect(one('gasté 5 lucas en el almuerzo')).toEqual([
       { name: 'registrar_movimiento', input: { tipo: 'gasto', monto: 5000, fecha: today, categoria: 'c1', cuenta: 'a1', descripcion: 'almuerzo' } },
     ]);
-    expect(one('eché 20 lucas de bencina en la Copec con la tarjeta CMR ayer')[0].input).toMatchObject({ monto: 20000, categoria: 'c2', cuenta: 'a2', fecha: '2026-10-24', descripcion: 'bencina Copec CMR' });
+    expect(one('eché 20 lucas de bencina en la Copec con la tarjeta CMR ayer')[0].input).toMatchObject({ monto: 20000, categoria: 'c2', cuenta: 'a2', fecha: '2026-10-24', descripcion: 'bencina en la Copec con la CMR' });
   });
   it('un ingreso', () => {
     expect(one('me pagaron el sueldo 850 mil')[0].input).toMatchObject({ tipo: 'ingreso', monto: 850000, categoria: 'c4' });
@@ -79,12 +80,12 @@ describe('acciones', () => {
     expect(one('dentista mañana a las 10, avísame una hora antes')).toEqual([
       { name: 'crear_evento', input: { titulo: 'Dentista', fecha: '2026-10-26', hora_inicio: '10:00', hora_fin: null, tipo: 'salud', repetir: 'no', aviso_minutos: 60, lugar: null } },
     ]);
-    expect(one('cumpleaños de mi mamá el 14 de marzo')[0].input).toMatchObject({ titulo: 'Cumpleaños mamá', fecha: '2027-03-14', tipo: 'familia', repetir: 'anual', hora_inicio: null });
+    expect(one('cumpleaños de mi mamá el 14 de marzo')[0].input).toMatchObject({ titulo: 'Cumpleaños de mi mamá', fecha: '2027-03-14', tipo: 'familia', repetir: 'anual', hora_inicio: null });
     expect(one('reunión el lunes a las 3 de la tarde')[0].input).toMatchObject({ titulo: 'Reunión', fecha: '2026-10-26', hora_inicio: '15:00', tipo: 'trabajo' });
   });
   it('tareas', () => {
-    expect(one('tarea pagar la luz el viernes')).toEqual([{ name: 'crear_tarea', input: { titulo: 'Pagar luz', fecha: '2026-10-30', hora: null, urgente: false } }]);
-    expect(one('tengo que llamar al banco urgente')[0].input).toMatchObject({ titulo: 'Llamar banco', fecha: null, urgente: true });
+    expect(one('tarea pagar la luz el viernes')).toEqual([{ name: 'crear_tarea', input: { titulo: 'Pagar la luz', fecha: '2026-10-30', hora: null, urgente: false } }]);
+    expect(one('tengo que llamar al banco urgente')[0].input).toMatchObject({ titulo: 'Llamar al banco', fecha: null, urgente: true });
   });
   it('diario y gratitud', () => {
     expect(one('hoy fue un buen día, salí con mi familia y fui al gym')).toEqual([
@@ -139,5 +140,25 @@ describe('ramos (26-10-2026)', () => {
   it('lee el rango de horas, el profesor y si es en grupo', () => {
     const [c] = one('tengo el ramo Cálculo los martes de 20:30 a 22:00 con el profesor Pérez, trabajos en grupo');
     expect(c.input).toMatchObject({ nombre: 'Cálculo', dia_semana: 2, hora_inicio: '20:30', hora_fin: '22:00', profesor: 'Pérez', en_grupo: true, evaluaciones: 'Trabajos' });
+  });
+});
+
+describe('frases de la prueba en Telegram (27-10-2026)', () => {
+  it('una prueba de un ramo va a Estudios', () => {
+    expect(one('3 de noviembre prueba de inglés')).toEqual([{ name: 'crear_evaluacion', input: { ramo: 'r1', titulo: 'Prueba', fecha: '2026-11-03', porcentaje: null } }]);
+  });
+  it('el cierre de una unidad también, aunque venga en una frase larga', () => {
+    expect(one('10 de noviembre deben estar cerrada hasta la unidad 5 de inglés')[0].input).toMatchObject({ ramo: 'r1', titulo: 'Cierre unidad 5', fecha: '2026-11-10' });
+    expect(one('Dentro de mi app tengo el ramo de inglés, y el 10 de noviembre se cierra la unidad 5, es como una prueba')[0]).toMatchObject({ name: 'crear_evaluacion', input: { titulo: 'Cierre unidad 5' } });
+  });
+  it('sin el ramo en Estudios, queda como evento de Estudios', () => {
+    expect(one('3 de noviembre prueba de historia')[0]).toMatchObject({ name: 'crear_evento', input: { tipo: 'estudios' } });
+  });
+  it('los títulos no llevan la orden y conservan los números', () => {
+    expect(one('Agrega evento trotar 5 km hoy')[0].input).toMatchObject({ titulo: 'Trotar 5 km', fecha: today });
+    expect(one('Agregar evento para el 30 de octubre, enviar correo a fiscal por suspensión')[0].input).toMatchObject({ titulo: 'Enviar correo a fiscal por suspensión', fecha: '2026-10-30' });
+  });
+  it('algo con fecha y sin otra pista es una tarea de ese día', () => {
+    expect(one('Trotar 5km hoy')).toEqual([{ name: 'crear_tarea', input: { titulo: 'Trotar 5km', fecha: today, hora: null, urgente: false } }]);
   });
 });

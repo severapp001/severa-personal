@@ -100,7 +100,10 @@ const parseData = (v: unknown): Record<string, unknown> => {
 
 // ─── La cuenta conectada y su contexto ───────────────────────────────────────
 type Flow = { kind: 'cierre'; step: 'animo' | 'cuerpo' | 'mente' | 'alma' | 'bueno' | 'manana'; day: string };
-type State = { pending?: { nonce: string; calls: ToolCall[]; today: string }; flow?: Flow };
+type Pending = { calls: ToolCall[]; today: string; at: string };
+// Varias propuestas pueden esperar a la vez (27-10-2026: al escribir otra, la anterior quedaba
+// «ya no está pendiente»). Se guardan las últimas 10.
+type State = { pending?: Record<string, Pending>; flow?: Flow };
 type Link = { account_id: string; chat_id: number; state: State };
 type Row = Record<string, unknown>;
 
@@ -139,7 +142,7 @@ async function load(link: Link): Promise<Ctx | null> {
   if (!space) return null;
   const today = chileToday();
   const since = addDays(today, -62);
-  const [cats, accounts, habits, logs, lessons, movements, events, tasks, onboarding] = await Promise.all([
+  const [cats, accounts, habits, logs, lessons, movements, events, tasks, onboarding, courses] = await Promise.all([
     admin.from('fin_categories').select('*').or(`space_id.eq.${space},space_id.is.null`).is('deleted_at', null),
     live('fin_accounts', space),
     live('habits', space).eq('active', true),
@@ -149,6 +152,7 @@ async function load(link: Link): Promise<Ctx | null> {
     live('calendar_events', space),
     live('tasks', space),
     admin.from('onboarding_answers').select('answers').eq('account_id', link.account_id).maybeSingle(),
+    live('study_courses', space).eq('archived', false),
   ]);
   const catRows = (cats.data ?? []) as Row[];
   const accountRows = ((accounts.data ?? []) as Row[]).filter((a) => !a.archived);
@@ -158,6 +162,7 @@ async function load(link: Link): Promise<Ctx | null> {
     categories: catRows.map((c) => ({ id: String(c.id), name: String(c.name), kind: c.kind as 'expense' | 'income', for_work: c.for_work as boolean })),
     accounts: accountRows.map((a) => ({ id: String(a.id), name: String(a.name), kind: String(a.kind) })),
     habits: habitRows.map((h) => ({ id: String(h.id), name: String(h.name), direction: h.direction as 'good' | 'reduce', daily_target: Number(h.daily_target) || 1, unit: (h.unit as string) ?? null })),
+    courses: ((courses.data ?? []) as Row[]).map((c) => ({ id: String(c.id), name: String(c.name) })),
   });
   const names = new Map(catRows.map((c) => [String(c.id), String(c.name)]));
   const evs = (events.data ?? []) as CalendarEvent[];
@@ -255,6 +260,11 @@ async function execute(ctx: Ctx, p: Proposal) {
     case 'agradecer':
       await insert(ctx, 'gratitude_entries', { day: p.date, body: p.text.slice(0, 500) });
       return;
+    case 'crear_evaluacion':
+      // Como en Estudios: la prueba queda en el ramo y en el Calendario como prioridad del día.
+      await insert(ctx, 'study_assessments', { course_id: ctx.refs[p.course].id, title: p.title, due_on: p.date, weight: p.weight, grade: null });
+      await insert(ctx, 'calendar_events', { title: `Prueba: ${p.title} · ${ctx.refs[p.course].name}`.slice(0, 120), event_date: p.date, starts_at: null, ends_at: null, layer: 'estudios', repeat: 'none', remind_minutes: null, location: null, notes: null, importance: 1, repeat_until: null });
+      return;
     case 'crear_ramo': {
       const notes = [p.until ? `hasta ${p.until}` : null, p.group === null ? null : p.group ? 'trabajos en grupo' : 'individual', p.evaluations].filter(Boolean).join(' · ');
       const course = await insert(ctx, 'study_courses', { name: p.name, institution: null, teacher: p.teacher, term: notes || null, person_id: null, program_id: null, pass_grade: 4.0, archived: false });
@@ -284,7 +294,11 @@ async function interpret(ctx: Ctx, text: string) {
     return send(ctx.chat, reply);
   }
   const id = nonce();
-  await setState(ctx.link, { ...ctx.link.state, pending: { nonce: id, calls: found.map((x) => x.c), today: ctx.today } });
+  const kept = Object.entries(ctx.link.state.pending ?? {})
+    .filter(([, v]) => !!v && Array.isArray((v as Pending).calls) && typeof (v as Pending).at === 'string')
+    .sort(([, x], [, y]) => y.at.localeCompare(x.at))
+    .slice(0, 9);
+  await setState(ctx.link, { ...ctx.link.state, pending: { ...Object.fromEntries(kept), [id]: { calls: found.map((x) => x.c), today: ctx.today, at: new Date().toISOString() } } });
   const lines = found.map((x) => `• ${proposalLine(x.p, ctx.refs)}`);
   return send(ctx.chat, [r.reply, found.length > 1 ? '¿Guardo esto?' : '¿Lo guardo?', ...lines].filter(Boolean).join('\n'), [
     [
@@ -445,12 +459,13 @@ async function onButton(q: NonNullable<Update['callback_query']>) {
 
   const [kind, a, b] = data.split(':');
   if (kind === 'ok' || kind === 'no') {
-    const pending = link.state.pending;
-    if (!pending || pending.nonce !== a) {
-      await edit(m, `${m.text ?? ''}\n\n(Ya no está pendiente.)`);
+    const pending = link.state.pending?.[a];
+    if (!pending || !Array.isArray(pending.calls)) {
+      await edit(m, `${m.text ?? ''}\n\n(Ya no está pendiente: escríbelo de nuevo.)`);
       return done();
     }
-    await setState(link, { ...link.state, pending: undefined });
+    const others = Object.fromEntries(Object.entries(link.state.pending ?? {}).filter(([k]) => k !== a));
+    await setState(link, { ...link.state, pending: others });
     if (kind === 'no') {
       await edit(m, `${m.text ?? ''}\n\n✖️ Cancelado.`);
       return done('Cancelado');

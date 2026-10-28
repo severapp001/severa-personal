@@ -10,6 +10,7 @@ import { authErrorMessage } from '@/features/account/authErrors';
 import type { KindDef } from '@/features/modules/catalog';
 import { EntrySheet, type SheetTarget } from '@/features/modules/EntrySheet';
 import { ModuleHeader } from '@/features/space/ModuleHeader';
+import { CardsTab, UnitsTab } from '@/features/studies/StudyTools';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fonts } from '@/theme/tokens';
 import { AppText, Button, Notice, Screen } from '@/ui';
@@ -25,7 +26,7 @@ import { ChipRow, DateField, Empty, Field, Kicker, normalizeTime, Panel, PillTab
 // - calculadora de notas: qué necesitas para la nota que quieres;
 // - las pruebas quedan en el Calendario y las clases entran a Tu día.
 
-type Tab = 'courses' | 'week' | 'tests';
+type Tab = 'courses' | 'week' | 'tests' | 'temario' | 'repaso';
 const fmtGrade = (g: number | null | undefined) => (g === null || g === undefined ? '—' : Number(g).toFixed(1).replace('.', ','));
 const DAY = (iso: string) => `${iso.slice(8, 10)}-${iso.slice(5, 7)}`;
 const SHORT = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
@@ -151,6 +152,8 @@ export default function EstudiosScreen() {
           { value: 'courses', label: 'Programas y ramos' },
           { value: 'week', label: 'Semana' },
           { value: 'tests', label: 'Pruebas' },
+          { value: 'temario', label: 'Temario y estudio' },
+          { value: 'repaso', label: 'Repaso' },
         ]}
         value={tab}
         onChange={setTab}
@@ -199,6 +202,8 @@ export default function EstudiosScreen() {
           </View>
         </>
       ) : null}
+      {tab === 'temario' ? <UnitsTab courses={courses} store={programs} today={today} /> : null}
+      {tab === 'repaso' ? <CardsTab courses={courses} store={programs} today={today} /> : null}
       {tab === 'week' ? <WeekGrid courses={courses} blocks={s.blocks} tests={s.assessments} programs={progs} name={name} today={today} /> : null}
       {tab === 'tests' ? (
         <Panel>
