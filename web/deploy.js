@@ -15,6 +15,10 @@ const out = fs.mkdtempSync(path.join(os.tmpdir(), 'severa-web-'));
 const vercel = (args) => execSync(`npx --yes vercel@latest ${args}`, { cwd: out, stdio: 'inherit' });
 
 execSync(`npx expo export --platform web --output-dir "${out}"`, { cwd: root, stdio: 'inherit' });
+// La CLI de Vercel nunca sube carpetas llamadas node_modules, y ahí deja Expo las fuentes (Manrope)
+// y las imágenes de expo-router. Se suben como assets/vendor y vercel.json redirige las rutas viejas.
+const vendored = path.join(out, 'assets', 'node_modules');
+if (fs.existsSync(vendored)) fs.renameSync(vendored, path.join(out, 'assets', 'vendor'));
 fs.copyFileSync(path.join(__dirname, 'vercel.json'), path.join(out, 'vercel.json'));
 vercel('link --yes --project severa-personal');
 vercel('deploy --prod --yes');

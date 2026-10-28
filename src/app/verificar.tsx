@@ -1,5 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
+import { Platform } from 'react-native';
 
 import { useAuth } from '@/data/auth';
 import { authErrorMessage } from '@/features/account/authErrors';
@@ -56,10 +57,18 @@ export default function VerificarScreen() {
   return (
     <Screen>
       <AppText variant="title">Revisa tu correo</AppText>
-      <AppText muted>
-        Te enviamos un enlace a <AppText variant="body">{email}</AppText>. Ábrelo en este teléfono y toca
-        «Confirmar»: la app se abre sola.
-      </AppText>
+      {Platform.OS === 'web' ? (
+        <AppText muted>
+          Te enviamos un enlace a <AppText variant="body">{email}</AppText>. Toca «Confirmar» en el correo: Severa
+          se abre con tu sesión. Si se abre en otra pestaña o en otro navegador, tu correo igual queda confirmado:
+          vuelve aquí y entra con tu correo y contraseña.
+        </AppText>
+      ) : (
+        <AppText muted>
+          Te enviamos un enlace a <AppText variant="body">{email}</AppText>. Ábrelo en este teléfono y toca
+          «Confirmar»: la app se abre sola.
+        </AppText>
+      )}
 
       {bootstrapError ? <Notice text={authErrorMessage({ message: bootstrapError })} /> : null}
       {error ? <Notice text={error} /> : null}
@@ -93,7 +102,8 @@ export default function VerificarScreen() {
       <AppText variant="caption" muted>
         ¿No lo ves? Revisa la carpeta de spam. Si confirmaste desde otro dispositivo, vuelve y entra con tu contraseña.
       </AppText>
-      {withCode ? null : <Button label="Me llegó un código" kind="link" onPress={() => setWithCode(true)} />}
+      {/* En la web confundía: hoy el correo trae solo el enlace. */}
+      {withCode || Platform.OS === 'web' ? null : <Button label="Me llegó un código" kind="link" onPress={() => setWithCode(true)} />}
       <Button label="Ir a entrar" kind="link" onPress={() => router.replace('/entrar')} />
     </Screen>
   );

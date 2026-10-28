@@ -27,7 +27,7 @@ function RootNavigator() {
   // La bienvenida (logo vivo y presentación) solo la primera vez.
   const [showWelcome] = useState(() => !welcomeSeen());
   const { colors } = useTheme();
-  const [fontsLoaded] = useFonts({
+  const [fontsLoaded, fontsError] = useFonts({
     Manrope_400Regular,
     Manrope_500Medium,
     Manrope_600SemiBold,
@@ -35,7 +35,9 @@ function RootNavigator() {
     Manrope_800ExtraBold,
   });
 
-  const booting = loading || !fontsLoaded;
+  // Si las fuentes no cargan (en la web pasó con un archivo que no se subió), se sigue con la del sistema
+  // en vez de dejar la pantalla en negro.
+  const booting = loading || (!fontsLoaded && !fontsError);
   useEffect(() => {
     if (!booting) SplashScreen.hideAsync();
   }, [booting]);
