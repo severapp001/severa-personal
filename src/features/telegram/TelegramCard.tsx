@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Linking, StyleSheet, View } from 'react-native';
 
@@ -91,6 +92,7 @@ export function TelegramCard() {
           <AppText variant="caption" muted>
             Escríbele al bot como hablas («gasté 5 lucas en el almuerzo», «idea: …») o usa /hoy y /cerrar. Lo que guardes llega aquí solo.
           </AppText>
+          <Button label="Ver lo que conversamos" kind="secondary" onPress={() => router.push({ pathname: '/asistente', params: { ver: 'conversaciones' } })} />
           <Button label="Desconectar" kind="link" onPress={disconnect} />
         </>
       ) : (
@@ -111,6 +113,4 @@ export function TelegramCard() {
   );
 }
 
-const styles = StyleSheet.create({
-  card: { borderRadius: 22, padding: 16, gap: 12 },
-});
+const styles = StyleSheet.create({ card: { borderRadius: 22, padding: 16, gap: 12 } });

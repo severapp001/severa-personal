@@ -8,7 +8,7 @@ const path = require('path');
 const root = path.join(__dirname, '..');
 const from = path.join(root, 'src', 'core');
 const to = path.join(root, 'supabase', 'functions', '_shared', 'core');
-const FILES = ['intent', 'assistant', 'money', 'agenda', 'today', 'journal', 'goals', 'studies'];
+const FILES = ['intent', 'assistant', 'money', 'agenda', 'today', 'journal', 'goals', 'studies', 'bankMail', 'conversations'];
 
 fs.mkdirSync(to, { recursive: true });
 for (const name of FILES) {

@@ -24,6 +24,8 @@ import AjustesScreen from '@/app/(personal)/(tabs)/ajustes';
 import SaludMentalScreen from '@/app/(personal)/salud-mental';
 import PrioridadesScreen from '@/app/(personal)/prioridades';
 import { RoutineScreen } from '@/features/routine/RoutineScreen';
+import { CourseDetail } from '@/features/studies/CourseDetail';
+import { useEntries } from '@/data/entries';
 import { IntroOverlay } from '@/features/welcome/IntroOverlay';
 import { LiveBrain } from '@/features/discovery/LiveBrain';
 import { MODULES } from '@/features/modules/catalog';
@@ -87,6 +89,7 @@ function Preview() {
     'Salud mental': <SaludMentalScreen />,
     Prioridades: <PrioridadesScreen />,
     'Tu rutina (pantalla nueva)': <RoutineScreen />,
+    'Ficha de un ramo (ejemplo)': <CourseDemo />,
     Resumen: <ResumenScreen />,
     Perfil: <PerfilScreen />,
     'Cuerpo, mente y alma': <CuerpoMenteAlmaScreen />,
@@ -145,4 +148,21 @@ function Preview() {
       )}
     </Screen>
   );
+}
+
+/** Una ficha de ramo con datos de ejemplo (la vista previa no tiene sesión ni ramos). */
+function CourseDemo() {
+  const hoy = useEntries('hoy');
+  const studies = useEntries('estudios');
+  const course = { id: 'demo', name: 'Inglés II', institution: null, term: null, teacher: 'Prof. Soto', pass_grade: 4, archived: false, person_id: null };
+  const blocks = [
+    { id: 'b1', course_id: 'demo', weekday: 2, starts_at: '19:00:00', ends_at: '20:30:00', room: 'Online' },
+    { id: 'b2', course_id: 'demo', weekday: 4, starts_at: '19:00:00', ends_at: '20:30:00', room: null },
+  ];
+  const tests = [
+    { id: 't1', course_id: 'demo', title: 'Prueba 1', due_on: '2026-10-06', weight: 30, grade: 5.2 },
+    { id: 't2', course_id: 'demo', title: 'Prueba de inglés', due_on: '2026-11-03', weight: 30, grade: null },
+    { id: 't3', course_id: 'demo', title: 'Examen', due_on: '2026-12-01', weight: 40, grade: null },
+  ];
+  return <CourseDetail course={course} blocks={blocks} assessments={tests} program={null} marks={hoy} studies={studies} today="2026-10-28" onBack={() => undefined} onAddTest={() => undefined} onAddBlock={() => undefined} onGrade={() => undefined} onRemoveTest={() => undefined} onRemoveBlock={() => undefined} calculator={null} />;
 }

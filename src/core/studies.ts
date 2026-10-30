@@ -85,3 +85,31 @@ export function classesOn(
   }
   return out.sort((a, b) => a.block.starts_at.localeCompare(b.block.starts_at));
 }
+
+const nextDay = (day: string) => {
+  const d = new Date(Number(day.slice(0, 4)), Number(day.slice(5, 7)) - 1, Number(day.slice(8, 10)) + 1, 12);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
+/** Cada clase de un ramo entre dos fechas (28-10-2026, usuario: «saber qué clases ver y cuáles no
+ *  porque ya las vi»): el día y el bloque, de la más nueva a la más antigua. */
+export function sessionsBetween(blocks: Block[], from: string, to: string): { day: string; block: Block }[] {
+  const out: { day: string; block: Block }[] = [];
+  for (let d = from, n = 0; d <= to && n < 800; d = nextDay(d), n++) {
+    const wd = isoWeekday(d);
+    for (const b of blocks.filter((x) => Number(x.weekday) === wd).sort((a, b) => a.starts_at.localeCompare(b.starts_at))) out.push({ day: d, block: b });
+  }
+  return out.reverse();
+}
+
+/** Cómo va un ramo: el promedio, cuánto se ha evaluado (en %) y cuánto suman los porcentajes. */
+export function courseStatus(assessments: Assessment[]): { average: number | null; evaluated: number; planned: number; graded: number; total: number } {
+  const graded = assessments.filter((a) => a.grade !== null && a.grade !== undefined);
+  return {
+    average: courseAverage(assessments),
+    evaluated: graded.reduce((s, a) => s + (Number(a.weight) || 0), 0),
+    planned: assessments.reduce((s, a) => s + (Number(a.weight) || 0), 0),
+    graded: graded.length,
+    total: assessments.length,
+  };
+}

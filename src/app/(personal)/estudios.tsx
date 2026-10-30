@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { addDays } from '@/core/agenda';
-import { courseAverage, daysUntil, isoWeekday, neededGrade, upcoming, WEEKDAYS } from '@/core/studies';
+import { courseAverage, daysUntil, isoWeekday, neededGrade, upcoming } from '@/core/studies';
 import { useAgenda } from '@/data/agenda';
 import { useEntries, type Entry } from '@/data/entries';
 import { useStudies, type Course } from '@/data/modules';
@@ -10,6 +10,7 @@ import { authErrorMessage } from '@/features/account/authErrors';
 import type { KindDef } from '@/features/modules/catalog';
 import { EntrySheet, type SheetTarget } from '@/features/modules/EntrySheet';
 import { ModuleHeader } from '@/features/space/ModuleHeader';
+import { CourseDetail } from '@/features/studies/CourseDetail';
 import { CardsTab, UnitsTab } from '@/features/studies/StudyTools';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fonts } from '@/theme/tokens';
@@ -25,6 +26,8 @@ import { ChipRow, DateField, Empty, Field, Kicker, normalizeTime, Panel, PillTab
 // - la semana en una grilla por bloques (45, 60 o 90 minutos) con las pruebas de la semana;
 // - calculadora de notas: qué necesitas para la nota que quieres;
 // - las pruebas quedan en el Calendario y las clases entran a Tu día.
+// 28-10-2026: tocar un ramo abre su ficha (CourseDetail): cómo voy, pruebas y ponderaciones, horario
+// y cada clase con «Asistí» y «La vi».
 
 type Tab = 'courses' | 'week' | 'tests' | 'temario' | 'repaso';
 const fmtGrade = (g: number | null | undefined) => (g === null || g === undefined ? '—' : Number(g).toFixed(1).replace('.', ','));
@@ -52,7 +55,8 @@ export default function EstudiosScreen() {
   const s = useStudies();
   const programs = useEntries('estudios');
   // Asistencia: las clases marcadas en Tu día, el Calendario o Prioridades («clase:<bloque>»).
-  const marks = useEntries('hoy').of('hecho');
+  const hoy = useEntries('hoy');
+  const marks = hoy.of('hecho');
   const agenda = useAgenda(todayIso(), todayIso());
   const [tab, setTab] = useState<Tab>('courses');
   const [open, setOpen] = useState<string | null>(null);
@@ -75,7 +79,6 @@ export default function EstudiosScreen() {
     const avg = courseAverage(list);
     const pass = Number(c.pass_grade) || 4;
     const need = neededGrade(list, pass);
-    const expanded = open === c.id;
     const blocks = s.blocks.filter((b) => b.course_id === c.id).sort((a, b) => a.weekday - b.weekday || a.starts_at.localeCompare(b.starts_at));
     const program = progs.find((p) => p.id === c.program_id);
     const from = program?.day ?? addDays(today, -56);
@@ -87,11 +90,11 @@ export default function EstudiosScreen() {
     const went = marks.filter((m) => m.day && m.day >= from && blocks.some((b) => m.title === `clase:${b.id}`)).length;
     return (
       <Panel key={c.id}>
-        <Pressable onPress={() => setOpen(expanded ? null : c.id)} onLongPress={() => confirmDelete('study_courses', c.id, `el ramo ${c.name}`)} style={styles.head}>
+        <Pressable onPress={() => (tap(), setOpen(c.id))} onLongPress={() => confirmDelete('study_courses', c.id, `el ramo ${c.name}`)} style={styles.head}>
           <View style={{ flex: 1, gap: 2 }}>
             <AppText variant="subtitle">{c.name}</AppText>
             <AppText variant="caption" muted>
-              {[blocks.map((b) => `${SHORT[b.weekday - 1]} ${b.starts_at.slice(0, 5)}`).join(', ') || null, c.teacher].filter(Boolean).join(' · ') || 'Toca para ver horario, notas y pruebas'}
+              {[blocks.map((b) => `${SHORT[b.weekday - 1]} ${b.starts_at.slice(0, 5)}`).join(', ') || null, c.teacher].filter(Boolean).join(' · ') || 'Toca para ver horario, pruebas y clases'}
             </AppText>
           </View>
           <View style={[styles.avg, { backgroundColor: avg === null ? colors.surface2 : avg >= pass ? colors.okSoft : colors.badSoft }]}>
@@ -106,42 +109,59 @@ export default function EstudiosScreen() {
             {need.possible ? `Necesitas un ${fmtGrade(need.grade)} en lo que queda para aprobar.` : `Con lo que queda ya no alcanza el ${fmtGrade(pass)}. Habla con tu profesor o profesora.`}
           </AppText>
         ) : null}
-        {expanded ? (
-          <View style={{ gap: 6 }}>
-            <Kicker>Horario</Kicker>
-            {blocks.length ? (
-              blocks.map((b) => <Row key={b.id} title={`${WEEKDAYS[b.weekday - 1]} · ${b.starts_at.slice(0, 5)} – ${b.ends_at.slice(0, 5)}`} sub={b.room ? `Sala ${b.room}` : undefined} onLongPress={() => confirmDelete('study_blocks', b.id, 'este bloque')} />)
-            ) : (
-              <Empty text="Agrega cuándo tienes clases de este ramo." />
-            )}
-            <Kicker>Notas y pruebas</Kicker>
-            {list.map((a) => (
-              <Row
-                key={a.id}
-                title={a.title}
-                sub={[a.due_on ? DAY(a.due_on) : null, a.weight ? `${a.weight} %` : null].filter(Boolean).join(' · ') || undefined}
-                onPress={() => setGrading(a.id)}
-                onLongPress={() => confirmDelete('study_assessments', a.id, a.title)}
-                right={<AppText variant="label">{fmtGrade(a.grade)}</AppText>}
-              />
-            ))}
-            {!list.length ? <Empty text="Agrega las pruebas con su porcentaje para calcular el promedio." /> : null}
-            {list.length ? <GradeCalculator list={list} pass={pass} /> : null}
-            <View style={{ flexDirection: 'row', gap: 8 }}>
-              <View style={{ flex: 1 }}>
-                <Button label="+ Prueba o nota" kind="secondary" onPress={() => setSheet('test')} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Button label="+ Clase" kind="secondary" onPress={() => setSheet('block')} />
-              </View>
-            </View>
-          </View>
-        ) : null}
+        <AppText variant="caption" color={colors.accent}>
+          {`${list.length} ${list.length === 1 ? 'prueba' : 'pruebas'} · ${list.reduce((n, a) => n + (Number(a.weight) || 0), 0)} % · ver ficha del ramo ›`}
+        </AppText>
       </Panel>
     );
   };
 
   const next = upcoming(s.assessments, today);
+  const detail = tab === 'courses' && open ? (courses.find((c) => c.id === open) ?? null) : null;
+  const sheets = (
+    <>
+      <CourseSheet visible={sheet === 'course'} programs={progs} onClose={() => setSheet(null)} onSave={s.addCourse} />
+      <TestSheet
+        visible={sheet === 'test'}
+        courses={courses}
+        courseId={open}
+        onClose={() => setSheet(null)}
+        onSave={async (v) => {
+          await s.addAssessment(v);
+          // La prueba queda en el Calendario como prioridad del día (26-10-2026).
+          if (v.due_on && v.grade === null) {
+            await agenda.addEvent({ title: `Prueba: ${v.title} · ${name(v.course_id)}`.slice(0, 120), event_date: v.due_on, starts_at: null, ends_at: null, layer: 'estudios', repeat: 'none', remind_minutes: null, location: null, notes: null, importance: 1, repeat_until: null });
+          }
+        }}
+      />
+      <BlockSheet visible={sheet === 'block'} courses={courses} courseId={open} onClose={() => setSheet(null)} onSave={s.addBlock} />
+      <GradeSheet id={grading} title={s.assessments.find((a) => a.id === grading)?.title ?? ''} onClose={() => setGrading(null)} onSave={(g) => (grading ? s.setGrade(grading, g) : undefined)} />
+    </>
+  );
+  if (detail) {
+    const list = s.assessments.filter((a) => a.course_id === detail.id);
+    return (
+      <>
+        <CourseDetail
+          course={detail}
+          blocks={s.blocks.filter((b) => b.course_id === detail.id).sort((a, b) => a.weekday - b.weekday || a.starts_at.localeCompare(b.starts_at))}
+          assessments={list}
+          program={progs.find((p) => p.id === detail.program_id) ?? null}
+          marks={hoy}
+          studies={programs}
+          today={today}
+          onBack={() => setOpen(null)}
+          onAddTest={() => setSheet('test')}
+          onAddBlock={() => setSheet('block')}
+          onGrade={setGrading}
+          onRemoveTest={(x) => confirmDelete('study_assessments', x.id, x.title)}
+          onRemoveBlock={(x) => confirmDelete('study_blocks', x.id, 'este bloque')}
+          calculator={<GradeCalculator list={list} pass={Number(detail.pass_grade) || 4} />}
+        />
+        {sheets}
+      </>
+    );
+  }
   const loose = courses.filter((c) => !c.program_id || !progs.some((p) => p.id === c.program_id));
 
   return (
@@ -227,22 +247,7 @@ export default function EstudiosScreen() {
         </Panel>
       ) : null}
 
-      <CourseSheet visible={sheet === 'course'} programs={progs} onClose={() => setSheet(null)} onSave={s.addCourse} />
-      <TestSheet
-        visible={sheet === 'test'}
-        courses={courses}
-        courseId={open}
-        onClose={() => setSheet(null)}
-        onSave={async (v) => {
-          await s.addAssessment(v);
-          // La prueba queda en el Calendario como prioridad del día (26-10-2026).
-          if (v.due_on && v.grade === null) {
-            await agenda.addEvent({ title: `Prueba: ${v.title} · ${name(v.course_id)}`.slice(0, 120), event_date: v.due_on, starts_at: null, ends_at: null, layer: 'estudios', repeat: 'none', remind_minutes: null, location: null, notes: null, importance: 1, repeat_until: null });
-          }
-        }}
-      />
-      <BlockSheet visible={sheet === 'block'} courses={courses} courseId={open} onClose={() => setSheet(null)} onSave={s.addBlock} />
-      <GradeSheet id={grading} title={s.assessments.find((a) => a.id === grading)?.title ?? ''} onClose={() => setGrading(null)} onSave={(g) => (grading ? s.setGrade(grading, g) : undefined)} />
+      {sheets}
       <EntrySheet
         target={programSheet}
         ctx={{ parent: null, entries: programs.entries }}

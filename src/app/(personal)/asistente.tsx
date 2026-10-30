@@ -1,3 +1,4 @@
+import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
@@ -21,6 +22,7 @@ import {
   type ToolUse,
 } from '@/core/assistant';
 import { addDays, eventsOn, hhmm } from '@/core/agenda';
+import { CONV_KIND, CONV_MODULE, convOf, firstState, withResult, type ConvState } from '@/core/conversations';
 import { incomeStatement, monthKey } from '@/core/finance';
 import { correctionRules, HELP, parseMessage, type IntentData } from '@/core/intent';
 import { activitiesOf, dayEntry } from '@/core/journal';
@@ -28,7 +30,9 @@ import { dayKey, daysToPayday, type PaydayAnswer } from '@/core/today';
 import { appendMessage, askAssistant, replaceMessage, startConversation, updateConversationRefs, useAssistantActions, useChat, type Conversation, type StoredMessage } from '@/data/assistant';
 import { useAuth } from '@/data/auth';
 import { useOnboarding } from '@/data/discovery';
+import { useEntries } from '@/data/entries';
 import { BRAIN } from '@/features/assistant/brain';
+import { ConversationsSheet, useNotUnderstood } from '@/features/assistant/ConversationsSheet';
 import { GuidedFlow } from '@/features/assistant/GuidedFlow';
 import { ideaText, IdeasSheet, useIdeas } from '@/features/assistant/IdeasSheet';
 import { ProposalCard } from '@/features/assistant/ProposalCard';
@@ -37,7 +41,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { fonts, radius, space } from '@/theme/tokens';
 import { AppText, Button, Notice, Screen } from '@/ui';
 import { tap } from '@/ui/haptics';
-import { ArrowClockwiseIcon, LightbulbIcon, ListChecksIcon, PaperPlaneRightIcon, SparkleIcon } from '@/ui/icons';
+import { ArrowClockwiseIcon, ChatsIcon, LightbulbIcon, ListChecksIcon, PaperPlaneRightIcon, SparkleIcon } from '@/ui/icons';
 import { Empty, Sheet } from '@/ui/kit';
 
 // Asistente (decisión del 25-10-2026): escribes con tus palabras y Severa propone qué registrar.
@@ -56,6 +60,8 @@ const EXAMPLES = [
 ];
 
 const strip = (m: StoredMessage): ChatMessage => ({ role: m.role, content: m.content });
+const nowIso = () => new Date().toISOString();
+const STATE_OF: Record<ResultStatus, ConvState> = { done: 'guardado', corrected: 'corregido', cancelled: 'cancelado', skipped: 'sin_responder', failed: 'error' };
 
 export default function AsistenteScreen() {
   const { colors, mode } = useTheme();
@@ -77,6 +83,11 @@ export default function AsistenteScreen() {
   const [showIdeas, setShowIdeas] = useState(false);
   const openIdeas = ideas.entries.filter((e) => e.module === 'ideas' && e.kind === 'idea' && !e.done).length;
   const scroll = useRef<ScrollView>(null);
+  // Lo que conversamos (Z3, 29-10-2026): cada frase queda en la cuenta, con lo que entendió y en qué quedó.
+  const talk = useEntries(CONV_MODULE);
+  const { ver } = useLocalSearchParams<{ ver?: string }>();
+  const [showTalk, setShowTalk] = useState(ver === 'conversaciones');
+  const missed = useNotUnderstood(today);
 
   useEffect(() => {
     const t = setTimeout(() => scroll.current?.scrollToEnd({ animated: true }), 50);
@@ -152,6 +163,11 @@ export default function AsistenteScreen() {
       const stamp = `${outgoing.length}`;
       const content: Block[] = [...(r.reply ? [{ type: 'text', text: r.reply }] : []), ...r.calls.map((c, i) => ({ type: 'tool_use', id: `local-${stamp}-${i}`, name: c.name, input: c.input }))];
       await appendMessage(conv.id, 'assistant', content.length ? content : [{ type: 'text', text: HELP }]);
+      const lineas = r.calls
+        .map((c) => readProposal(c.name, c.input, refs, today))
+        .filter((p): p is Proposal => !!p)
+        .map((p) => proposalLine(p, refs));
+      await talk.add({ kind: CONV_KIND, title: lastText, body: r.reply ?? null, day: today, data: { canal: 'app', estado: firstState(r.calls.length, r.reply, HELP), id: `${conv.id}:${stamp}`, lineas, at: nowIso() } }).catch(() => undefined);
       return;
     }
     const { content } = await askAssistant(conv.context, outgoing);
@@ -166,6 +182,7 @@ export default function AsistenteScreen() {
     if (idea) {
       setText('');
       await ideas.add({ module: 'ideas', kind: 'idea', title: idea, day: today });
+      await talk.add({ kind: CONV_KIND, title: value, day: today, data: { canal: 'app', estado: 'idea', at: nowIso() } }).catch(() => undefined);
       setSavedNote(`Idea guardada en «Tus ideas»: ${idea}`);
       return;
     }
@@ -221,6 +238,10 @@ export default function AsistenteScreen() {
     const last = messages.at(-1);
     if (last?.role === 'user') await replaceMessage(last.rowId, [block, ...last.content]);
     else await appendMessage(conversation.id, 'user', [block]);
+    // En qué quedó la frase en «Lo que conversamos». El id de la tarjeta es local-<frase>-<tarjeta>.
+    const [, stamp, index] = tool.id.split('-');
+    const row = talk.of(CONV_KIND).find((e) => e.data.id === `${conversation.id}:${stamp}`);
+    if (row) await talk.update(row.id, { data: withResult(convOf(row.data), index ?? '0', STATE_OF[status]) });
   }
 
   async function confirm(tool: ToolUse, index: number, before: Proposal, after: Proposal) {
@@ -246,6 +267,14 @@ export default function AsistenteScreen() {
         title="Severa"
         right={
           <View style={{ flexDirection: 'row', gap: 8 }}>
+            <Pressable accessibilityRole="button" accessibilityLabel={`Lo que conversamos${missed ? `: ${missed} sin entender` : ''}`} onPress={() => setShowTalk(true)} style={[styles.round, { backgroundColor: colors.surface }]}>
+              <ChatsIcon size={20} color={colors.accent} />
+              {missed ? (
+                <AppText variant="caption" color={colors.bad} style={styles.badge}>
+                  {missed}
+                </AppText>
+              ) : null}
+            </Pressable>
             <Pressable accessibilityRole="button" accessibilityLabel={`Tus ideas: ${openIdeas}`} onPress={() => setShowIdeas(true)} style={[styles.round, { backgroundColor: colors.surface }]}>
               <SparkleIcon size={20} color={colors.accent} />
               {openIdeas ? (
@@ -370,6 +399,7 @@ export default function AsistenteScreen() {
         }}
       />
       <IdeasSheet visible={showIdeas} today={today} onClose={() => setShowIdeas(false)} />
+      <ConversationsSheet visible={showTalk} today={today} onClose={() => setShowTalk(false)} onRetry={(t) => setText(t)} />
       <Sheet visible={showLessons} title="Lo que Severa aprendió de ti" onClose={() => setShowLessons(false)}>
         <AppText variant="caption" muted>
           Se usa en cada conversación nueva. Si algo quedó mal, olvídalo y corrige la próxima vez.

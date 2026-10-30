@@ -430,3 +430,7 @@ s3_secret_key = "env(S3_SECRET_KEY)"
 # cabecera secreta del bot o, desde la app, la sesión de la persona.
 [functions.telegram]
 verify_jwt = false
+
+# Correos del banco (29-10-2026): los manda el script de Apps Script de la persona con su clave.
+[functions.correo]
+verify_jwt = false

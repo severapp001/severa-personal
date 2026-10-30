@@ -1,8 +1,10 @@
-import { StyleSheet, Switch, View } from 'react-native';
+import * as Updates from 'expo-updates';
+import { Platform, StyleSheet, Switch, View } from 'react-native';
 
 import { useAuth } from '@/data/auth';
 import { usePreferences } from '@/data/preferences';
 import { SyncStatus } from '@/features/sync/SyncStatus';
+import { AutomationCard } from '@/features/automation/AutomationCard';
 import { TelegramCard } from '@/features/telegram/TelegramCard';
 import { useTheme } from '@/theme/ThemeProvider';
 import { themeNames, type ThemeKey } from '@/theme/tokens';
@@ -12,6 +14,15 @@ import { AppText, Button, Screen } from '@/ui';
 // y la cuenta, con el correo con que se entró (27-10: en la web se entró con otra cuenta sin notarlo).
 
 const THEMES: ThemeKey[] = ['gold', 'dark', 'blue', 'light', 'pink'];
+
+/** Qué versión corre (29-10-2026: para saber si ya llegó la última actualización). */
+function appVersion(): string {
+  if (Platform.OS === 'web') return 'web';
+  const d = Updates.createdAt;
+  if (!d || Updates.isEmbeddedLaunch) return 'la de la instalación (sin actualizaciones todavía)';
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${p(d.getDate())}-${p(d.getMonth() + 1)} ${p(d.getHours())}:${p(d.getMinutes())} · ${String(Updates.updateId ?? '').slice(0, 8)}`;
+}
 
 export default function AjustesScreen() {
   const { colors, theme, mode, workTheme, setWorkTheme } = useTheme();
@@ -51,6 +62,8 @@ export default function AjustesScreen() {
 
       <TelegramCard />
 
+      <AutomationCard />
+
       <View style={card}>
         <AppText variant="subtitle">Tu cuenta</AppText>
         {session?.user.email ? (
@@ -58,6 +71,9 @@ export default function AjustesScreen() {
             {`Entraste con ${session.user.email}. Usa el mismo correo en el teléfono y en la web para ver los mismos datos.`}
           </AppText>
         ) : null}
+        <AppText variant="caption" muted>
+          {`Versión de la app: ${appVersion()}`}
+        </AppText>
         <Button label="Repetir Conocerte" kind="secondary" onPress={redoOnboarding} />
         <Button label="Salir" kind="link" onPress={signOut} />
       </View>

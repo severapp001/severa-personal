@@ -73,7 +73,7 @@
     "update": "eas update --channel preview --environment preview",
     "web:deploy": "node web/deploy.js",
     "bot:core": "node scripts/bot-core.js",
-    "bot:deploy": "node scripts/bot-core.js && supabase functions deploy telegram --use-api --no-verify-jwt --project-ref hcwmbeokrcagrqbhvkoa"
+    "bot:deploy": "node scripts/bot-core.js && supabase functions deploy telegram --use-api --no-verify-jwt --project-ref hcwmbeokrcagrqbhvkoa && supabase functions deploy correo --use-api --no-verify-jwt --project-ref hcwmbeokrcagrqbhvkoa"
   },
   "private": true,
   "jest": {

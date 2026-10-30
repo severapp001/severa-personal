@@ -1,6 +1,6 @@
 import { describe, expect, it } from '@jest/globals';
 
-import { classesOn, courseAverage, daysUntil, isoWeekday, neededGrade, upcoming, weekPlan, type Assessment } from '../studies';
+import { classesOn, courseAverage, courseStatus, sessionsBetween, daysUntil, isoWeekday, neededGrade, upcoming, weekPlan, type Assessment } from '../studies';
 
 const a = (id: string, grade: number | null, weight: number | null, due_on: string | null = null): Assessment => ({ id, course_id: 'c', title: id, due_on, weight, grade });
 
@@ -65,5 +65,24 @@ describe('clases del día (26-10-2026)', () => {
     expect(isoWeekday('2026-10-29')).toBe(4);
     expect(classesOn('2026-10-29', blocks, courses, programs).map((c) => c.block.id)).toEqual(['b1']);
     expect(classesOn('2026-12-17', blocks, courses, programs)).toEqual([]);
+  });
+});
+
+describe('clases y cómo va un ramo (28-10-2026)', () => {
+  const blocks = [
+    { id: 'b1', course_id: 'c1', weekday: 2, starts_at: '10:00:00', ends_at: '11:30:00', room: null },
+    { id: 'b2', course_id: 'c1', weekday: 4, starts_at: '18:00:00', ends_at: '19:30:00', room: null },
+  ];
+  it('cada clase entre dos fechas, la más nueva primero', () => {
+    // 2026-10-20 es martes y 2026-10-22, jueves.
+    expect(sessionsBetween(blocks, '2026-10-19', '2026-10-25').map((x) => `${x.day}:${x.block.id}`)).toEqual(['2026-10-22:b2', '2026-10-20:b1']);
+  });
+  it('cuánto se ha evaluado y cuánto suman los porcentajes', () => {
+    const list = [
+      { id: 'a', course_id: 'c1', title: 'Prueba 1', due_on: null, weight: 30, grade: 5 },
+      { id: 'b', course_id: 'c1', title: 'Prueba 2', due_on: null, weight: 30, grade: null },
+      { id: 'c', course_id: 'c1', title: 'Examen', due_on: null, weight: 40, grade: null },
+    ];
+    expect(courseStatus(list)).toEqual({ average: 5, evaluated: 30, planned: 100, graded: 1, total: 3 });
   });
 });

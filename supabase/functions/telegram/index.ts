@@ -11,6 +11,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2.117.2';
 
 import { addDays, dailyPriorities, eventsOn, hhmm, type CalendarEvent, type PriorityState, type Task } from '../_shared/core/agenda.ts';
 import { buildRefs, proposalLine, readProposal, type Lesson, type Proposal, type Refs } from '../_shared/core/assistant.ts';
+import { CONV_KIND, CONV_MODULE, firstState, type ConvData, type ConvState } from '../_shared/core/conversations.ts';
 import { goalPriorities, type GoalRow } from '../_shared/core/goals.ts';
 import { HELP, parseMessage, type IntentData, type ToolCall } from '../_shared/core/intent.ts';
 import { activitiesOf, MOODS } from '../_shared/core/journal.ts';
@@ -25,11 +26,7 @@ const allowed = (Deno.env.get('ASSISTANT_ALLOWED_USERS') ?? '')
   .map((s) => s.trim())
   .filter(Boolean);
 
-const cors = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-};
+const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } });
 
 const COMMANDS = [
@@ -78,7 +75,9 @@ const edit = (m: Message, text: string) => tg('editMessageText', { chat_id: m.ch
 
 async function webhookSecret(): Promise<string> {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${TOKEN}:severa-webhook`));
-  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('').slice(0, 48);
+  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0'))
+    .join('')
+    .slice(0, 48);
 }
 const nonce = () => Array.from(crypto.getRandomValues(new Uint8Array(4)), (b) => b.toString(16).padStart(2, '0')).join('');
 
@@ -123,19 +122,7 @@ async function personalSpace(account: string): Promise<string | null> {
 
 const live = (table: string, space: string) => admin.from(table).select('*').eq('space_id', space).is('deleted_at', null);
 
-type Ctx = {
-  link: Link;
-  chat: number;
-  space: string;
-  today: string;
-  refs: Refs;
-  lessons: Lesson[];
-  accounts: Row[];
-  data: IntentData;
-  events: CalendarEvent[];
-  tasks: Task[];
-  habits: { id: string; good: boolean; target: number; count: number }[];
-};
+type Ctx = { link: Link; chat: number; space: string; today: string; refs: Refs; lessons: Lesson[]; accounts: Row[]; data: IntentData; events: CalendarEvent[]; tasks: Task[]; habits: { id: string; good: boolean; target: number; count: number }[] };
 
 async function load(link: Link): Promise<Ctx | null> {
   const space = await personalSpace(link.account_id);
@@ -206,7 +193,10 @@ async function insert(ctx: Ctx, table: string, values: Row): Promise<string> {
 async function journalDay(ctx: Ctx, day: string, patch: Row) {
   const { data } = await live('journal_days', ctx.space).eq('day', day).maybeSingle();
   if (data) {
-    const { error } = await admin.from('journal_days').update(patch).eq('id', (data as Row).id);
+    const { error } = await admin
+      .from('journal_days')
+      .update(patch)
+      .eq('id', (data as Row).id);
     if (error) throw error;
     return data as Row;
   }
@@ -240,7 +230,19 @@ async function execute(ctx: Ctx, p: Proposal) {
       await insert(ctx, 'assistant_lessons', { kind: 'rule', phrase: p.phrase, meaning: p.meaning, active: true });
       return;
     case 'crear_evento':
-      await insert(ctx, 'calendar_events', { title: p.title, event_date: p.date, starts_at: p.start, ends_at: p.start ? p.end : null, layer: p.layer, repeat: p.repeat, remind_minutes: p.remind, location: p.place, notes: null, importance: 0, repeat_until: null });
+      await insert(ctx, 'calendar_events', {
+        title: p.title,
+        event_date: p.date,
+        starts_at: p.start,
+        ends_at: p.start ? p.end : null,
+        layer: p.layer,
+        repeat: p.repeat,
+        remind_minutes: p.remind,
+        location: p.place,
+        notes: null,
+        importance: 0,
+        repeat_until: null,
+      });
       return;
     case 'crear_tarea':
       await insert(ctx, 'tasks', { title: p.title, due_on: p.date, due_at: p.date ? p.time : null, urgent: p.urgent, notes: null, status: 'pending', done_on: null, moved_from: null });
@@ -250,11 +252,7 @@ async function execute(ctx: Ctx, p: Proposal) {
       const { data } = await live('journal_days', ctx.space).eq('day', p.date).maybeSingle();
       const before = activitiesOf((data as Row | null)?.activities as string | null);
       const body = (data as Row | null)?.body as string | null;
-      await journalDay(ctx, p.date, {
-        ...(p.mood ? { mood: p.mood } : {}),
-        activities: JSON.stringify([...new Set([...before, ...p.activities])].slice(0, 30)),
-        ...(p.text ? { body: (body ? `${body}\n\n${p.text}` : p.text).slice(0, 5000) } : {}),
-      });
+      await journalDay(ctx, p.date, { ...(p.mood ? { mood: p.mood } : {}), activities: JSON.stringify([...new Set([...before, ...p.activities])].slice(0, 30)), ...(p.text ? { body: (body ? `${body}\n\n${p.text}` : p.text).slice(0, 5000) } : {}) });
       return;
     }
     case 'agradecer':
@@ -263,7 +261,19 @@ async function execute(ctx: Ctx, p: Proposal) {
     case 'crear_evaluacion':
       // Como en Estudios: la prueba queda en el ramo y en el Calendario como prioridad del día.
       await insert(ctx, 'study_assessments', { course_id: ctx.refs[p.course].id, title: p.title, due_on: p.date, weight: p.weight, grade: null });
-      await insert(ctx, 'calendar_events', { title: `Prueba: ${p.title} · ${ctx.refs[p.course].name}`.slice(0, 120), event_date: p.date, starts_at: null, ends_at: null, layer: 'estudios', repeat: 'none', remind_minutes: null, location: null, notes: null, importance: 1, repeat_until: null });
+      await insert(ctx, 'calendar_events', {
+        title: `Prueba: ${p.title} · ${ctx.refs[p.course].name}`.slice(0, 120),
+        event_date: p.date,
+        starts_at: null,
+        ends_at: null,
+        layer: 'estudios',
+        repeat: 'none',
+        remind_minutes: null,
+        location: null,
+        notes: null,
+        importance: 1,
+        repeat_until: null,
+      });
       return;
     case 'crear_ramo': {
       const notes = [p.until ? `hasta ${p.until}` : null, p.group === null ? null : p.group ? 'trabajos en grupo' : 'individual', p.evaluations].filter(Boolean).join(' · ');
@@ -279,8 +289,35 @@ async function execute(ctx: Ctx, p: Proposal) {
   }
 }
 
+// ─── Lo que se conversa (Z3, 29-10-2026): se ve en la app, en Asistente → «Lo que conversamos» ──
+// Si falla, el bot sigue: es un registro, no lo que se anota.
+async function logConv(ctx: Ctx, said: string, reply: string | null, data: ConvData) {
+  try {
+    await insert(ctx, 'module_entries', { module: CONV_MODULE, kind: CONV_KIND, title: said.slice(0, 200), body: reply ? reply.slice(0, 5000) : null, day: ctx.today, data: JSON.stringify({ ...data, at: new Date().toISOString() }), done: false });
+  } catch (e) {
+    console.error('conversación', e);
+  }
+}
+
+/** Lo que pasó al tocar «Guardar» o «Cancelar». Si la frase no está (propuesta de antes del 29-10), se anota. */
+async function markConv(ctx: Ctx, id: string, estado: ConvState, lineas: string[] | null, said: string) {
+  try {
+    const { data } = await live('module_entries', ctx.space).eq('module', CONV_MODULE).eq('kind', CONV_KIND).like('data', `%${id}%`).order('created_at', { ascending: false }).limit(1).maybeSingle();
+    if (!data) return logConv(ctx, said, null, { canal: said.startsWith('💳') ? 'correo' : 'telegram', estado, id, ...(lineas ? { lineas } : {}) });
+    const before = parseData((data as Row).data);
+    const { error } = await admin
+      .from('module_entries')
+      .update({ data: JSON.stringify({ ...before, estado, ...(lineas ? { lineas } : {}) }) })
+      .eq('id', (data as Row).id);
+    if (error) throw error;
+  } catch (e) {
+    console.error('conversación', e);
+  }
+}
+
 const saveIdea = async (ctx: Ctx, text: string) => {
   await insert(ctx, 'module_entries', { module: 'ideas', kind: 'idea', title: text.slice(0, 200), day: ctx.today, data: '{}', done: false });
+  await logConv(ctx, text, null, { canal: 'telegram', estado: 'idea' });
   return send(ctx.chat, `💡 Idea guardada en «Tus ideas»: ${text}\nEn la app la vuelves meta o tarea (Asistente → ✨).`);
 };
 const ideaText = (raw: string) => /^\s*(?:💡\s*)?idea\s*[:,.-]?\s+(.+)$/is.exec(raw)?.[1].trim() ?? null;
@@ -291,6 +328,7 @@ async function interpret(ctx: Ctx, text: string) {
   const found = r.calls.map((c) => ({ c, p: readProposal(c.name, c.input, ctx.refs, ctx.today) })).filter((x): x is { c: ToolCall; p: Proposal } => !!x.p);
   if (!found.length) {
     const reply = r.reply === HELP ? HELP.replace('Toca «Anotarlo con opciones» y te pregunto paso a paso, o escribe', 'Escribe') : (r.reply ?? HELP_BOT);
+    await logConv(ctx, text, reply, { canal: 'telegram', estado: firstState(0, r.reply, HELP) });
     return send(ctx.chat, reply);
   }
   const id = nonce();
@@ -300,6 +338,7 @@ async function interpret(ctx: Ctx, text: string) {
     .slice(0, 9);
   await setState(ctx.link, { ...ctx.link.state, pending: { ...Object.fromEntries(kept), [id]: { calls: found.map((x) => x.c), today: ctx.today, at: new Date().toISOString() } } });
   const lines = found.map((x) => `• ${proposalLine(x.p, ctx.refs)}`);
+  await logConv(ctx, text, r.reply ?? null, { canal: 'telegram', estado: 'propuesto', id, lineas: found.map((x) => proposalLine(x.p, ctx.refs)) });
   return send(ctx.chat, [r.reply, found.length > 1 ? '¿Guardo esto?' : '¿Lo guardo?', ...lines].filter(Boolean).join('\n'), [
     [
       { text: '✅ Guardar', callback_data: `ok:${id}` },
@@ -320,7 +359,12 @@ async function today(ctx: Ctx) {
   const rows = ((entries.data ?? []) as Row[]).map((e) => ({ ...e, data: parseData(e.data) })) as unknown as (GoalRow & { module: string; kind: string })[];
   const marks = rows.filter((e) => e.module === 'hoy' && e.day === day);
   const programs = rows.filter((e) => e.kind === 'programa').map((e) => ({ id: e.id, day: e.day, until: (e as unknown as Row).until as string | null }));
-  const classes = classesOn(day, (blocks.data ?? []) as Block[], ((courses.data ?? []) as Row[]).map((c) => ({ id: String(c.id), name: String(c.name), teacher: (c.teacher as string) ?? null, archived: c.archived as boolean, program_id: (c.program_id as string) ?? null })), programs).map(({ block, course }) => ({
+  const classes = classesOn(
+    day,
+    (blocks.data ?? []) as Block[],
+    ((courses.data ?? []) as Row[]).map((c) => ({ id: String(c.id), name: String(c.name), teacher: (c.teacher as string) ?? null, archived: c.archived as boolean, program_id: (c.program_id as string) ?? null })),
+    programs,
+  ).map(({ block, course }) => ({
     id: block.id,
     title: course.name,
     time: hhmm(block.starts_at),
@@ -338,7 +382,12 @@ async function today(ctx: Ctx) {
     assessments: [],
     birthdays: [],
     classes,
-    goals: goalPriorities(day, metas.filter((e) => e.kind === 'meta'), metas.filter((e) => e.kind === 'paso'), metas.filter((e) => e.kind === 'hito')),
+    goals: goalPriorities(
+      day,
+      metas.filter((e) => e.kind === 'meta'),
+      metas.filter((e) => e.kind === 'paso'),
+      metas.filter((e) => e.kind === 'hito'),
+    ),
   });
   const lines = items.map((i) => `${i.done ? '✅' : '☐'} ${i.time ? `${i.time} ` : ''}${i.title}${i.sub && i.origin !== 'event' ? ` · ${i.sub}` : ''}`);
   return send(ctx.chat, [`📋 Hoy, ${longDay(day)}`, '', ...(lines.length ? lines : ['Nada pendiente por hoy. 🙌']), '', 'Para cerrar el día: /cerrar'].join('\n'));
@@ -389,7 +438,11 @@ async function flowText(ctx: Ctx, flow: Flow, text: string) {
 async function check(ctx: Ctx, day: string, part: string, n: number) {
   const { data } = await live('module_entries', ctx.space).eq('module', 'cuerpo_mente_alma').eq('kind', 'chequeo').eq('day', day).maybeSingle();
   const merged = JSON.stringify({ ...parseData((data as Row | null)?.data), [part]: n });
-  if (data) await admin.from('module_entries').update({ data: merged }).eq('id', (data as Row).id);
+  if (data)
+    await admin
+      .from('module_entries')
+      .update({ data: merged })
+      .eq('id', (data as Row).id);
   else await insert(ctx, 'module_entries', { module: 'cuerpo_mente_alma', kind: 'chequeo', day, data: merged, done: false });
 }
 
@@ -458,6 +511,17 @@ async function onButton(q: NonNullable<Update['callback_query']>) {
   if (!ctx) return done('No encontré tu espacio personal.');
 
   const [kind, a, b] = data.split(':');
+  // «No avisar más de este tipo» en un correo del banco que no se pudo leer (función `correo`).
+  if (kind === 'ig') {
+    const st = link.state as State & { avisos?: Record<string, { clave: string; at: string }> };
+    const aviso = st.avisos?.[a];
+    if (aviso) {
+      await insert(ctx, 'module_entries', { module: 'correo', kind: 'ignorar', title: aviso.clave.slice(0, 190), day: ctx.today, data: '{}', done: false });
+      await setState(link, { ...st, avisos: Object.fromEntries(Object.entries(st.avisos ?? {}).filter(([k]) => k !== a)) } as State);
+    }
+    await edit(m, `${m.text ?? ''}\n\n🔕 Listo: no te aviso más de correos como este.`);
+    return done('Listo');
+  }
   if (kind === 'ok' || kind === 'no') {
     const pending = link.state.pending?.[a];
     if (!pending || !Array.isArray(pending.calls)) {
@@ -466,7 +530,9 @@ async function onButton(q: NonNullable<Update['callback_query']>) {
     }
     const others = Object.fromEntries(Object.entries(link.state.pending ?? {}).filter(([k]) => k !== a));
     await setState(link, { ...link.state, pending: others });
+    const said = (m.text ?? '').split('\n').slice(0, 2).join(' · ');
     if (kind === 'no') {
+      await markConv(ctx, a, 'cancelado', null, said);
       await edit(m, `${m.text ?? ''}\n\n✖️ Cancelado.`);
       return done('Cancelado');
     }
@@ -480,9 +546,17 @@ async function onButton(q: NonNullable<Update['callback_query']>) {
       }
     } catch (e) {
       console.error('guardar', e);
+      await markConv(ctx, a, 'error', null, said);
       await edit(m, `${m.text ?? ''}\n\n⚠️ No se pudo guardar todo. Inténtalo en la app.`);
       return done('No se pudo guardar');
     }
+    await markConv(
+      ctx,
+      a,
+      'guardado',
+      saved.map((s) => s.slice(2)),
+      said,
+    );
     await edit(m, ['✅ Guardado:', ...saved].join('\n'));
     return done('Guardado');
   }
