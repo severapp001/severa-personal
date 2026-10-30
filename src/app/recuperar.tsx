@@ -32,7 +32,7 @@ export default function RecuperarScreen() {
   }
 
   return (
-    <Screen>
+    <Screen width="narrow">
       <AppText variant="title">Cambiar tu contraseña</AppText>
       {sent ? (
         <>

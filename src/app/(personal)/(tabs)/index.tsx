@@ -5,20 +5,15 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 
 import { addDays } from '@/core/agenda';
 import { greeting } from '@/core/today';
-import { AgendaPrioritiesCard } from '@/features/agenda/PrioritiesCard';
 import { NeuronSheet } from '@/features/discovery/NeuronSheet';
-import { SuggestionCard } from '@/features/discovery/SuggestionCard';
 import { MODULES } from '@/features/modules/catalog';
-import { NextStepCard } from '@/features/goals/NextStepCard';
 import { SpaceTopBar } from '@/features/space/SpaceHeader';
 import { usePref } from '@/features/space/usePref';
-import { ThreePartsMini } from '@/features/stats/ThreeParts';
-import { useLifeStats } from '@/features/stats/useLifeStats';
-import { HabitsCard } from '@/features/today/HabitsCard';
-import { BreathCard, MeditationCard, ZenCard } from '@/features/today/MindCards';
-import { ModuleHomeCard } from '@/features/today/ModuleHomeCard';
-import { BibleCard, DayCard, JournalCard, MoneyCard, PrivateNote, WorkLinkCard } from '@/features/today/PersonalCards';
+import { cardFor } from '@/features/today/homeCards';
+import { PrivateNote } from '@/features/today/PersonalCards';
 import { useToday, type Today } from '@/features/today/useToday';
+import { HoyV3 } from '@/features/v3/HoyV3';
+import { useV3 } from '@/features/v3/useV3';
 import { JornadaCard, WorkLineCard, WorkTasksCard } from '@/features/today/WorkToday';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fonts } from '@/theme/tokens';
@@ -26,6 +21,7 @@ import { AppText, Button, Screen } from '@/ui';
 import { tap } from '@/ui/haptics';
 import { ArrowDownIcon, ArrowUpIcon, CaretLeftIcon, CaretRightIcon, PlusIcon, XIcon } from '@/ui/icons';
 import { Sheet } from '@/ui/kit';
+import { useLayout } from '@/ui/layout';
 
 // Hoy (vista previa del 17-10-2026, variante B). En Personal se arma con lo que la persona eligió en
 // Conocerte y se ordena según la hora; en Trabajo es el modo foco: la jornada y sus tareas.
@@ -66,11 +62,6 @@ function Stagger({ children }: { children: ReactNode[] }) {
   );
 }
 
-function PartsCard({ t }: { t: Today }) {
-  const stats = useLifeStats(t.day);
-  return <ThreePartsMini stats={stats} today={t.day} onOpen={() => router.push('/cuerpo-mente-alma')} />;
-}
-
 // Módulos que ya tienen su tarjeta propia en Inicio (Metas → «Tu próximo paso»).
 const OWN_CARD = new Set(['metas']);
 
@@ -91,43 +82,15 @@ function defaultOrder(t: Today): string[] {
   return base.filter((k) => !NEEDS[k] || t.on.has(NEEDS[k]));
 }
 
-function cardFor(key: string, t: Today, openSheet: (code: string) => void): ReactNode {
-  switch (key) {
-    case 'dia':
-      return <DayCard t={t} onSeeAll={() => router.navigate('/calendario')} />;
-    case 'paso':
-      return <NextStepCard day={t.day} />;
-    case 'yo':
-      return <PartsCard t={t} />;
-    case 'prio':
-      return <AgendaPrioritiesCard day={t.day} />;
-    case 'hab':
-      return <HabitsCard t={t} />;
-    case 'plata':
-      return <MoneyCard t={t} />;
-    case 'trab':
-      return t.works ? <WorkLinkCard t={t} /> : null;
-    case 'pan':
-      return t.on.has('biblia') ? <BibleCard t={t} /> : null;
-    case 'diario':
-      return t.on.has('diario') || t.on.has('gratitud') ? <JournalCard t={t} /> : null;
-    case 'zen':
-      return <ZenCard day={t.day} />;
-    case 'resp':
-      return <BreathCard day={t.day} />;
-    case 'medit':
-      return <MeditationCard day={t.day} />;
-    case 'sug':
-      return t.suggestion && t.isToday ? (
-        <SuggestionCard suggestion={t.suggestion} neuron={t.neurons.find((n) => n.code === t.suggestion?.code)} onLater={t.skipSuggestion} onOpen={() => t.suggestion && openSheet(t.suggestion.code)} />
-      ) : null;
-    default:
-      return key.startsWith('mod:') && MODULES[key.slice(4)] ? <ModuleHomeCard def={MODULES[key.slice(4)]} today={t.day} /> : null;
-  }
+// Severa v3 (C64–C70): con «Probar Severa v3» encendido en Ajustes, Hoy es el de la v3 (features/v3).
+export default function Hoy() {
+  const { on } = useV3();
+  return on ? <HoyV3 /> : <HoyScreen />;
 }
 
-export default function HoyScreen() {
+function HoyScreen() {
   const { colors, mode } = useTheme();
+  const { wide, columns } = useLayout();
   const [viewDay, setViewDay] = useState<string | undefined>(undefined);
   const t = useToday(viewDay);
   const [sheet, setSheet] = useState<string | null>(null);
@@ -160,9 +123,33 @@ export default function HoyScreen() {
         ]
     : order.map((k) => cardFor(k, t, setSheet));
 
+  // En el computador (29-10-2026): «Tu día» (o la jornada) arriba a todo el ancho y el resto en
+  // columnas, repartidas en orden. En el teléfono, una sola columna como siempre.
+  const [lead, ...rest] = body.filter(Boolean);
+  const cols: ReactNode[][] = Array.from({ length: columns }, () => []);
+  rest.forEach((card, i) => cols[i % columns].push(card));
+  const cards =
+    wide && lead ? (
+      <View key={`${mode}:${t.day}`} style={{ gap: 16 }}>
+        <Stagger>{[lead]}</Stagger>
+        <View style={styles.columns}>
+          {cols.map((col, i) => (
+            <View key={i} style={styles.column}>
+              <Stagger>{col}</Stagger>
+            </View>
+          ))}
+        </View>
+      </View>
+    ) : (
+      // La clave por espacio y día vuelve a animar las tarjetas al cruzar o cambiar de día.
+      <View key={`${mode}:${t.day}`} style={{ gap: 12 }}>
+        <Stagger>{body}</Stagger>
+      </View>
+    );
+
   return (
-    <Screen>
-      <SpaceTopBar pip={!work && !!t.suggestion} />
+    <Screen width="full">
+      {wide ? null : <SpaceTopBar pip={!work && !!t.suggestion} />}
       <View style={{ gap: 6 }}>
         <View style={styles.dateRow}>
           <Pressable accessibilityRole="button" accessibilityLabel="Día anterior" onPress={() => go(-1)} hitSlop={8} style={[styles.arrow, { backgroundColor: colors.surface }]}>
@@ -188,10 +175,7 @@ export default function HoyScreen() {
           ) : null}
         </View>
       </View>
-      {/* La clave por espacio y día vuelve a animar las tarjetas al cruzar o cambiar de día. */}
-      <View key={`${mode}:${t.day}`} style={{ gap: 12 }}>
-        <Stagger>{body}</Stagger>
-      </View>
+      {cards}
       {!work ? <Button label="Personalizar inicio" kind="secondary" onPress={() => setEditing(true)} /> : null}
       <PrivateNote />
       <View style={{ height: 8, backgroundColor: colors.bg }} />
@@ -277,6 +261,8 @@ function LayoutSheet({ visible, order, customized, onClose, onSave }: { visible:
 
 const styles = StyleSheet.create({
   dateRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  columns: { flexDirection: 'row', alignItems: 'flex-start', gap: 16 },
+  column: { flex: 1, minWidth: 0, gap: 16 },
   arrow: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   today: { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 7 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, borderBottomWidth: StyleSheet.hairlineWidth },

@@ -1,9 +1,11 @@
 import type { Session } from '@supabase/supabase-js';
 import * as Linking from 'expo-linking';
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Platform } from 'react-native';
 
 import { parseAuthRedirect } from '@/core/authRedirect';
 import { TERMS_VERSION } from '@/core/legal';
+import { clearOfflineData } from '@/features/web/offline';
 import { supabase } from './supabase';
 
 type SignUpInput = { name: string; birthDate: string; email: string; password: string };
@@ -23,6 +25,12 @@ type AuthState = {
   redoOnboarding: () => void;
   signUp: (input: SignUpInput) => Promise<void>;
   verifyEmail: (email: string, code: string) => Promise<void>;
+  /**
+   * Después de confirmar el correo en otra pestaña o en otro navegador (en el iPhone, el enlace
+   * abre Safari y no la app del inicio), entra con la contraseña recién escrita.
+   * Devuelve 'sin-datos' si la app se recargó y ya no la tiene en memoria.
+   */
+  enterAfterConfirm: () => Promise<'ok' | 'sin-confirmar' | 'sin-datos'>;
   resendCode: (email: string) => Promise<void>;
   /** Abre la sesión con el enlace de «Confirmar» del correo. */
   completeFromUrl: (url: string) => Promise<void>;
@@ -35,9 +43,12 @@ type AuthState = {
 const AuthContext = createContext<AuthState | null>(null);
 
 // Adónde vuelven los enlaces del correo: severa://verificado y severa://nueva-clave
-// (en Expo Go, exp://…/--/verificado; en la web, http://localhost:8081/verificado).
-const emailRedirectTo = () => Linking.createURL('verificado');
-const recoveryRedirectTo = () => Linking.createURL('nueva-clave');
+// (en Expo Go, exp://…/--/verificado; en la web, https://…/app/verificado, porque desde el 29-10
+// la app vive en /app y la raíz es la landing; createURL no suma esa ruta base).
+const appLink = (path: string) =>
+  Platform.OS === 'web' ? `${window.location.origin}${process.env.EXPO_BASE_URL ?? ''}/${path}` : Linking.createURL(path);
+const emailRedirectTo = () => appLink('verificado');
+const recoveryRedirectTo = () => appLink('nueva-clave');
 
 // Crea el espacio personal, la persona «yo» y los consentimientos con los datos
 // que la persona dio al registrarse (quedan en user_metadata hasta este momento).
@@ -63,6 +74,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [bootstrapError, setBootstrapError] = useState<string | null>(null);
   const [recovering, setRecovering] = useState(false);
   const [onboarded, setOnboarded] = useState(false);
+  // Correo y contraseña de quien acaba de crear la cuenta, solo en memoria y hasta que entra.
+  const pending = useRef<{ email: string; password: string } | null>(null);
 
   const onSession = useCallback(async (next: Session | null) => {
     setSession(next);
@@ -70,6 +83,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setReady(false);
       return;
     }
+    pending.current = null;
     try {
       await ensureAccount(next);
       const { data: answers } = await supabase.from('onboarding_answers').select('completed_at').maybeSingle();
@@ -125,10 +139,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (data.user && (data.user.identities?.length ?? 0) === 0) {
           throw Object.assign(new Error('user already exists'), { code: 'user_already_exists' });
         }
+        pending.current = { email: email.trim().toLowerCase(), password };
       },
       async verifyEmail(email, code) {
         const { error } = await supabase.auth.verifyOtp({ email: email.trim().toLowerCase(), token: code.trim(), type: 'email' });
         if (error) throw error;
+      },
+      async enterAfterConfirm() {
+        const creds = pending.current;
+        if (!creds) return 'sin-datos';
+        const { error } = await supabase.auth.signInWithPassword(creds);
+        if (!error) return 'ok';
+        if (error.code === 'email_not_confirmed') return 'sin-confirmar';
+        throw error;
       },
       async resendCode(email) {
         const { error } = await supabase.auth.resend({
@@ -156,6 +179,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
       async signIn(email, password) {
         const { error } = await supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password });
+        // Si falta confirmar, «Revisa tu correo» podrá entrar sola cuando la persona vuelva.
+        if (error?.code === 'email_not_confirmed') pending.current = { email: email.trim().toLowerCase(), password };
         if (error) throw error;
       },
       async requestPasswordReset(email) {
@@ -170,6 +195,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setRecovering(false);
       },
       async signOut() {
+        pending.current = null;
+        clearOfflineData();
         setRecovering(false);
         await supabase.auth.signOut();
       },

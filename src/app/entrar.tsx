@@ -41,7 +41,7 @@ export default function EntrarScreen() {
   }
 
   return (
-    <Screen>
+    <Screen width="narrow">
       <View style={{ alignItems: 'center', gap: 12, paddingTop: 24, paddingBottom: 8 }}>
         <Logo size={96} boxed={!colors.isDark} />
         <AppText style={{ fontFamily: fonts.semibold, fontSize: 24, letterSpacing: 6 }}>SEVERA</AppText>

@@ -1,6 +1,7 @@
 import { useQuery } from '@powersync/react';
 import { useEffect, useState, useSyncExternalStore } from 'react';
 
+import { demoRows } from './demo';
 import { syncEnabled } from './powersync/PowerSyncProvider';
 
 // Lecturas «vivas»: con sincronización, de la base del teléfono (se actualizan solas y
@@ -42,7 +43,9 @@ function useRemoteRows<T>(remote: Remote<T>, key: string): { data: T[]; loading:
     // `remote` cambia en cada render; la consulta la identifica `key`.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, gen]);
-  return state;
+  // En la vitrina (data/demo.ts), las filas de ejemplo de esta consulta.
+  const demo = demoRows(key);
+  return demo ? { data: demo as T[], loading: false } : state;
 }
 
 function useLocalFirstRows<T>(sql: string, params: unknown[], remote: Remote<T>, key: string) {

@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 
 import { useAuth } from '@/data/auth';
 import { authErrorMessage } from '@/features/account/authErrors';
@@ -12,12 +12,13 @@ const RESEND_SECONDS = 60;
 // llegará un código de 6 dígitos: el campo queda a mano, escondido hasta entonces.
 export default function VerificarScreen() {
   const { email = '' } = useLocalSearchParams<{ email?: string }>();
-  const { verifyEmail, resendCode, bootstrapError } = useAuth();
+  const { verifyEmail, enterAfterConfirm, resendCode, bootstrapError } = useAuth();
   const [code, setCode] = useState('');
   const [withCode, setWithCode] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [entering, setEntering] = useState(false);
   const [wait, setWait] = useState(RESEND_SECONDS);
 
   useEffect(() => {
@@ -25,6 +26,37 @@ export default function VerificarScreen() {
     const t = setTimeout(() => setWait((w) => w - 1), 1000);
     return () => clearTimeout(t);
   }, [wait]);
+
+  // Al volver del correo (otra pestaña, Safari o la app de correo) entra sola si ya se confirmó.
+  // En el mismo navegador, la otra pestaña ya avisa la sesión; esto cubre la app del inicio del iPhone.
+  useEffect(() => {
+    const tryQuietly = () => void enterAfterConfirm().catch(() => undefined);
+    if (Platform.OS === 'web') {
+      const onVisible = () => {
+        if (document.visibilityState === 'visible') tryQuietly();
+      };
+      document.addEventListener('visibilitychange', onVisible);
+      return () => document.removeEventListener('visibilitychange', onVisible);
+    }
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') tryQuietly();
+    });
+    return () => sub.remove();
+  }, [enterAfterConfirm]);
+
+  async function onConfirmed() {
+    setEntering(true);
+    setError(null);
+    try {
+      const result = await enterAfterConfirm();
+      if (result === 'sin-datos') router.replace('/entrar');
+      if (result === 'sin-confirmar') setError('Todavía no aparece confirmado. Toca «Confirmar» en el correo y vuelve aquí.');
+    } catch (e) {
+      setError(authErrorMessage(e));
+    } finally {
+      setEntering(false);
+    }
+  }
 
   async function onVerify(value = code) {
     if (!/^\d{6}$/.test(value)) {
@@ -55,13 +87,12 @@ export default function VerificarScreen() {
   }
 
   return (
-    <Screen>
+    <Screen width="narrow">
       <AppText variant="title">Revisa tu correo</AppText>
       {Platform.OS === 'web' ? (
         <AppText muted>
           Te enviamos un enlace a <AppText variant="body">{email}</AppText>. Toca «Confirmar» en el correo: Severa
-          se abre con tu sesión. Si se abre en otra pestaña o en otro navegador, tu correo igual queda confirmado:
-          vuelve aquí y entra con tu correo y contraseña.
+          se abre ahí mismo. Si vuelves a esta pantalla, también entra sola.
         </AppText>
       ) : (
         <AppText muted>
@@ -73,6 +104,8 @@ export default function VerificarScreen() {
       {bootstrapError ? <Notice text={authErrorMessage({ message: bootstrapError })} /> : null}
       {error ? <Notice text={error} /> : null}
       {info && !error ? <Notice text={info} tone="ok" /> : null}
+
+      {withCode ? null : <Button label="Ya lo confirmé · Entrar" onPress={onConfirmed} loading={entering} />}
 
       {withCode ? (
         <>

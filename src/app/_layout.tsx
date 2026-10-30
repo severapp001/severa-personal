@@ -17,9 +17,11 @@ import { PreferencesProvider } from '@/data/preferences';
 import { PowerSyncProvider } from '@/data/powersync/PowerSyncProvider';
 import { welcomeSeen } from '@/data/welcome';
 import { useOtaUpdate } from '@/features/updates/useOtaUpdate';
+import { registerServiceWorker } from '@/features/web/offline';
 import { ThemeProvider, useTheme } from '@/theme/ThemeProvider';
 
 SplashScreen.preventAutoHideAsync();
+registerServiceWorker();
 
 function RootNavigator() {
   const { session, ready, loading, recovering, onboarded } = useAuth();
@@ -61,6 +63,7 @@ function RootNavigator() {
         {/* Solo en desarrollo: revisar animaciones en el navegador sin iniciar sesión. */}
         <Stack.Protected guard={__DEV__}>
           <Stack.Screen name="vista-previa" />
+          <Stack.Screen name="vitrina" />
         </Stack.Protected>
         <Stack.Protected guard={!inside}>
           <Stack.Screen name="entrar" />

@@ -6,6 +6,8 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { fonts } from '@/theme/tokens';
 import { AppText } from '@/ui';
 import { Logo } from '@/ui/Logo';
+import { IntroV3 } from '@/features/v3/IntroV3';
+import { useV3 } from '@/features/v3/useV3';
 
 // Inicio animado (26-10-2026, idea del usuario: «que comiencen a llegar palabras para generar la
 // espiral, comience a rotar y genere el logo de Severa»). Las palabras de la vida de la persona
@@ -81,8 +83,14 @@ function Word({ i, t, spin, size, color }: { i: number; t: SharedValue<number>; 
   );
 }
 
-/** `preview`: solo en la vista previa de desarrollo, para verla otra vez. */
+/** `preview`: solo en la vista previa de desarrollo, para verla otra vez. Con Severa v3 encendida, la
+ *  entrada es la de la v3 (features/v3/IntroV3: el logo de cuatro se arma sobre la figura). */
 export function IntroOverlay({ preview = false }: { preview?: boolean }) {
+  const { on } = useV3();
+  return on && !preview ? <IntroV3 /> : <IntroV2 preview={preview} />;
+}
+
+function IntroV2({ preview }: { preview: boolean }) {
   const { colors } = useTheme();
   const { width } = useWindowDimensions();
   const reduced = useReducedMotion();

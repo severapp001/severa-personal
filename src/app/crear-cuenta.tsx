@@ -50,7 +50,7 @@ export default function CrearCuentaScreen() {
   }
 
   return (
-    <Screen>
+    <Screen width="narrow">
       <AppText variant="title">Crear tu cuenta</AppText>
       <AppText muted>Después te haremos unas preguntas para armar tu Severa. Todo se puede cambiar.</AppText>
 

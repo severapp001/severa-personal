@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 
 import type { BibleBook, BibleMark, BibleRead, Verse } from '@/core/bible';
 import { useAuth } from './auth';
+import { demoRows } from './demo';
 import { useRows } from './live';
 import { db } from './powersync/database';
 import { deleteRecord, insertRecord, updateRecord, usePersonalSpace, useRecords } from './records';
@@ -44,6 +45,9 @@ async function writeCache(book: string, chapter: number, verses: Verse[]) {
 
 /** Los versículos de un capítulo: del teléfono si ya se leyó, si no del servidor. */
 export async function loadChapter(book: string, chapter: number): Promise<Verse[]> {
+  // En la vitrina (data/demo.ts) el capítulo sale de los datos de ejemplo.
+  const demo = demoRows(`bible_verses:${book}:${chapter}`);
+  if (demo) return demo as Verse[];
   const cached = await readCache(book, chapter);
   if (cached?.length) return cached;
   const { data, error } = await supabase.from('bible_verses').select('verse, body').eq('book', book).eq('chapter', chapter).order('verse');

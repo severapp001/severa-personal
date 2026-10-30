@@ -103,7 +103,7 @@ export default function ModulosScreen() {
         <AppText variant="title">Módulos</AppText>
         <SettingsButton />
       </View>
-      <Pressable accessibilityRole="button" accessibilityLabel="Abrir tu cerebro" onPress={() => router.push('/cerebro')} onLayout={(e) => setBrainW(e.nativeEvent.layout.width - 24)} style={[styles.brain, { backgroundColor: colors.surface }]}>
+      <Pressable accessibilityRole="button" accessibilityLabel="Abrir tu cerebro" onPress={() => router.push('/cerebro')} onLayout={(e) => setBrainW(Math.min(e.nativeEvent.layout.width - 24, 460))} style={[styles.brain, { backgroundColor: colors.surface }]}>
         {brainW > 0 ? <LiveBrain neurons={t.neurons} synapses={t.synapses} states={t.states} width={brainW} impulses={8} /> : <View style={{ height: 160 }} />}
         <AppText variant="label" color={colors.accent} style={{ textAlign: 'center' }}>
           Abrir tu cerebro y ver las conexiones
@@ -147,7 +147,7 @@ export default function ModulosScreen() {
 
 const styles = StyleSheet.create({
   kicker: { fontFamily: fonts.extrabold, letterSpacing: 1.4, fontSize: 11 },
-  brain: { borderRadius: 24, padding: 12, gap: 8, overflow: 'hidden' },
+  brain: { borderRadius: 24, padding: 12, gap: 8, overflow: 'hidden', alignItems: 'center' },
   search: { flex: 1, borderRadius: radius.md, paddingHorizontal: 14, paddingVertical: 10, fontFamily: fonts.medium, fontSize: 15 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
   icon: { width: 40, height: 40, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },

@@ -46,7 +46,7 @@ export default function NuevaClaveScreen() {
   }
 
   return (
-    <Screen>
+    <Screen width="narrow">
       <AppText variant="title">Contraseña nueva</AppText>
       {error ? <Notice text={error} /> : null}
       {!recovering && !error ? (

@@ -24,7 +24,7 @@ export default function BienvenidaScreen() {
 
   if (step === 'logo') {
     return (
-      <Screen scroll={false}>
+      <Screen scroll={false} width="narrow">
         <View style={{ flex: 1, justifyContent: 'center', gap: 24 }}>
           <LiveLogo run={run} onDone={() => setLogoDone(true)} />
           {logoDone ? (
@@ -55,7 +55,7 @@ export default function BienvenidaScreen() {
 
   const last = step === 2;
   return (
-    <Screen>
+    <Screen width="narrow">
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
         <View style={{ flexDirection: 'row', gap: 6 }} accessibilityLabel={`Paso ${step + 1} de 3`}>
           {[0, 1, 2].map((i) => (

@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Pressable, useWindowDimensions, View } from 'react-native';
 
 import type { Neuron, NeuronState, Synapse } from '@/core/discovery';
@@ -12,6 +12,13 @@ import FinanzasScreen from '@/app/(personal)/finanzas';
 import EstudiosScreen from '@/app/(personal)/estudios';
 import TrabajoScreen from '@/app/(personal)/(tabs)/trabajo';
 import InicioScreen from '@/app/(personal)/(tabs)/index';
+import ParteScreen from '@/app/(personal)/parte/[parte]';
+import TuCuerpoScreen from '@/app/(personal)/tu-cuerpo';
+import { setDemoData } from '@/data/demo';
+import { HoyV3 } from '@/features/v3/HoyV3';
+import { IntroV3 } from '@/features/v3/IntroV3';
+import { demoSource } from '@/features/web/demoData';
+import { dayKey } from '@/core/today';
 import ModulosScreen from '@/app/(personal)/(tabs)/modulos';
 import CalendarioScreen from '@/app/(personal)/(tabs)/calendario';
 import HabitosScreen from '@/app/(personal)/habitos';
@@ -31,6 +38,8 @@ import { LiveBrain } from '@/features/discovery/LiveBrain';
 import { MODULES } from '@/features/modules/catalog';
 import { ModuleBody } from '@/features/modules/ModuleScreen';
 import { setCrossDurationForPreview, SpaceCrossProvider, useCross } from '@/features/space/SpaceCross';
+import { TopNav } from '@/features/space/TopNav';
+import { WIDE } from '@/ui/layout';
 import { useTheme } from '@/theme/ThemeProvider';
 import { AppText, Button, Screen } from '@/ui';
 import { PillTabs } from '@/ui/kit';
@@ -77,6 +86,10 @@ function Preview() {
   const screens: Record<string, ReactNode> = {
     'Intro (palabras → logo)': <IntroOverlay key={replay} preview />,
     Inicio: <InicioScreen />,
+    'Una parte (Mente)': <ParteScreen />,
+    'Hoy v3 (datos de ejemplo)': <DemoData><HoyV3 /></DemoData>,
+    'Tu cuerpo v3 (datos de ejemplo)': <DemoData><TuCuerpoScreen /></DemoData>,
+    'Entrada v3': <IntroV3 key={replay} />,
     Módulos: <ModulosScreen />,
     Calendario: <CalendarioScreen />,
     Hábitos: <HabitosScreen />,
@@ -102,9 +115,11 @@ function Preview() {
     ...Object.fromEntries(Object.values(MODULES).map((m) => [m.title, <ModuleBody key={m.code} def={m} />])),
   };
   if (screen) {
+    // En el computador, con la barra de arriba, como dentro de la app (29-10-2026).
     return (
       <View style={{ flex: 1 }}>
-        {screens[screen]}
+        {width >= WIDE ? <TopNav /> : null}
+        <View style={{ flex: 1 }}>{screens[screen]}</View>
         <Pressable accessibilityRole="button" onPress={() => setScreen(null)} style={{ position: 'absolute', right: 16, bottom: 24, backgroundColor: '#D4AF5A', borderRadius: 999, paddingHorizontal: 16, paddingVertical: 10 }}>
           <AppText variant="label" color="#0B0B0C">
             Volver a la vista previa
@@ -165,4 +180,19 @@ function CourseDemo() {
     { id: 't3', course_id: 'demo', title: 'Examen', due_on: '2026-12-01', weight: 40, grade: null },
   ];
   return <CourseDetail course={course} blocks={blocks} assessments={tests} program={null} marks={hoy} studies={studies} today="2026-10-28" onBack={() => undefined} onAddTest={() => undefined} onAddBlock={() => undefined} onGrade={() => undefined} onRemoveTest={() => undefined} onRemoveBlock={() => undefined} calculator={null} />;
+}
+
+/** Los datos de ejemplo de la vitrina mientras se ve una pantalla de la v3 (sin sesión). */
+function DemoData({ children }: { children: ReactNode }) {
+  const [source] = useState(() => {
+    const src = demoSource(dayKey(new Date()));
+    setDemoData(src);
+    return src;
+  });
+  // Se vuelve a poner en el efecto: en desarrollo React monta dos veces y la limpieza la borraría.
+  useEffect(() => {
+    setDemoData(source);
+    return () => setDemoData(null);
+  }, [source]);
+  return <>{children}</>;
 }

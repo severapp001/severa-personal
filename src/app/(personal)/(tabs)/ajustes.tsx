@@ -3,9 +3,11 @@ import { Platform, StyleSheet, Switch, View } from 'react-native';
 
 import { useAuth } from '@/data/auth';
 import { usePreferences } from '@/data/preferences';
+import { useCross } from '@/features/space/SpaceCross';
 import { SyncStatus } from '@/features/sync/SyncStatus';
 import { AutomationCard } from '@/features/automation/AutomationCard';
 import { TelegramCard } from '@/features/telegram/TelegramCard';
+import { setCapa, useV3 } from '@/features/v3/useV3';
 import { useTheme } from '@/theme/ThemeProvider';
 import { themeNames, type ThemeKey } from '@/theme/tokens';
 import { AppText, Button, Screen } from '@/ui';
@@ -29,6 +31,8 @@ export default function AjustesScreen() {
   const { hideAmounts, setHideAmounts, setTheme } = usePreferences();
   const { session, signOut, redoOnboarding } = useAuth();
   const card = [styles.card, { backgroundColor: colors.surface }];
+  const v3 = useV3();
+  const cross = useCross();
 
   const row = (label: string, value: boolean, onChange: (v: boolean) => void) => (
     <View style={styles.row}>
@@ -42,6 +46,19 @@ export default function AjustesScreen() {
   return (
     <Screen>
       <AppText variant="title">Ajustes</AppText>
+
+      {/* Severa v3 (C64–C70, 29-10-2026): se prueba aquí; quien no la encienda sigue en la v2. */}
+      <View style={card}>
+        <AppText variant="subtitle">Severa v3</AppText>
+        <AppText variant="caption" muted>
+          La nueva Severa: el Ser y sus tres partes (cuerpo, mente y alma) con un selector en Hoy en lugar de Personal y Trabajo, «Tu cuerpo» con el Hombre de Vitruvio, tu equilibrio y tu nivel. Se apaga cuando quieras.
+        </AppText>
+        {row('Probar Severa v3', v3.on, (on) => {
+          v3.save({ on });
+          setCapa('ser');
+          if (on && mode === 'work') cross('personal');
+        })}
+      </View>
 
       <View style={card}>
         <AppText variant="subtitle">Tema</AppText>

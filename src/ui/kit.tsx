@@ -7,6 +7,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { fonts, radius, space } from '@/theme/tokens';
 import { tap } from './haptics';
 import { AppText } from './index';
+import { useLayout } from './layout';
 
 // Piezas comunes de los módulos (Finanzas, Estudios, Familia, CV, Hábitos).
 
@@ -38,9 +39,26 @@ export function Segmented<T extends string>({ options, value, onChange }: { opti
 }
 
 /** Hoja que sube desde abajo, con su propio desplazamiento y espacio para el teclado. */
+// En el computador (29-10-2026) la hoja es una ventana centrada, como un diálogo.
 export function Sheet({ visible, title, onClose, children }: { visible: boolean; title: string; onClose: () => void; children: ReactNode }) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  const { wide } = useLayout();
+  if (wide) {
+    return (
+      <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+        <View style={styles.dialogWrap}>
+          <Pressable style={[StyleSheet.absoluteFill, styles.backdrop]} onPress={onClose} accessibilityLabel="Cerrar" />
+          <View style={[styles.dialog, { backgroundColor: colors.surface, borderColor: colors.line }]}>
+            <AppText variant="subtitle">{title}</AppText>
+            <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: space.md, paddingBottom: space.sm }}>
+              {children}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+    );
+  }
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
@@ -373,6 +391,8 @@ const styles = StyleSheet.create({
   seg: { flexDirection: 'row', borderRadius: 14, padding: 4, gap: 4 },
   segBtn: { flex: 1, borderRadius: 10, paddingVertical: 9, alignItems: 'center', paddingHorizontal: 4 },
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
+  dialogWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: space.xl },
+  dialog: { width: '100%', maxWidth: 560, maxHeight: '86%', borderRadius: 24, borderWidth: StyleSheet.hairlineWidth, padding: space.xl, gap: space.md },
   sheet: { borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: space.xl, paddingTop: space.md, gap: space.md, maxHeight: '88%' },
   grab: { width: 40, height: 5, borderRadius: 3, alignSelf: 'center' },
   input: { borderRadius: radius.md, paddingHorizontal: space.lg, fontFamily: fonts.medium, fontSize: 16, paddingVertical: 12 },

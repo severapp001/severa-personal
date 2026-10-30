@@ -20,6 +20,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { fonts, radius, space } from '@/theme/tokens';
 import { tap } from './haptics';
 import { CheckIcon, EyeIcon, EyeSlashIcon } from './icons';
+import { useLayout } from './layout';
 
 type Variant = 'title' | 'subtitle' | 'body' | 'label' | 'caption';
 
@@ -47,14 +48,20 @@ export function AppText({
   );
 }
 
-export function Screen({ children, scroll = true }: { children: ReactNode; scroll?: boolean }) {
+// En el computador (29-10-2026) el contenido se centra con un ancho que se lee cómodo: angosto para
+// entrar o crear la cuenta, normal para las pantallas de los módulos y amplio para los paneles.
+const MAX_WIDTH = { narrow: 460, normal: 820, full: 1480 } as const;
+
+export function Screen({ children, scroll = true, width = 'normal' }: { children: ReactNode; scroll?: boolean; width?: keyof typeof MAX_WIDTH }) {
   const { colors } = useTheme();
+  const { wide } = useLayout();
+  const bodyStyle = wide ? [styles.screenBody, styles.screenWide, { maxWidth: MAX_WIDTH[width] }, width === 'narrow' && styles.screenCentered] : styles.screenBody;
   const body = scroll ? (
-    <ScrollView contentContainerStyle={styles.screenBody} keyboardShouldPersistTaps="handled">
+    <ScrollView contentContainerStyle={bodyStyle} keyboardShouldPersistTaps="handled">
       {children}
     </ScrollView>
   ) : (
-    <View style={styles.screenBody}>{children}</View>
+    <View style={bodyStyle}>{children}</View>
   );
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }}>
@@ -286,6 +293,8 @@ export function Notice({ text, tone = 'bad' }: { text: string; tone?: 'bad' | 'o
 
 const styles = StyleSheet.create({
   screenBody: { flexGrow: 1, padding: space.xl, gap: space.lg },
+  screenWide: { width: '100%', alignSelf: 'center', paddingHorizontal: 40, paddingTop: 36, paddingBottom: 48 },
+  screenCentered: { justifyContent: 'center' },
   button: { minHeight: 56, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', paddingHorizontal: space.lg },
   link: { minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   input: { minHeight: 52, borderRadius: radius.md, borderWidth: 1.5, paddingHorizontal: space.lg, fontFamily: fonts.medium, fontSize: 16 },

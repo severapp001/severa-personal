@@ -5,7 +5,7 @@ import { ageOn } from '@/core/age';
 import { displayAmount } from '@/core/money';
 import { useAuth } from '@/data/auth';
 import { useSelfPerson } from '@/data/discovery';
-import { useEntries } from '@/data/entries';
+import { useEntries, type Entries } from '@/data/entries';
 import { entryTitle, type ModuleDef } from '@/features/modules/catalog';
 import { ModuleIcon } from '@/features/modules/moduleIcons';
 import { ModuleWidget } from '@/features/modules/widgets';
@@ -25,13 +25,17 @@ import { CaretRightIcon, PlusIcon } from '@/ui/icons';
 
 const fmt = (d: string | null) => (d ? `${d.slice(8, 10)}-${d.slice(5, 7)}` : '');
 
-export function ModuleHomeCard({ def, today }: { def: ModuleDef; today: string }) {
+/** Solo para la vitrina de la landing (`/vitrina`, en desarrollo): datos de ejemplo en vez de los tuyos. */
+export type HomeCardDemo = { store: Entries; age: number | null };
+
+export function ModuleHomeCard({ def, today, demo }: { def: ModuleDef; today: string; demo?: HomeCardDemo }) {
   const { colors } = useTheme();
   const { session } = useAuth();
-  const store = useEntries(def.code);
+  const mine = useEntries(def.code);
+  const store = demo?.store ?? mine;
   const money = useAmountVisibility();
   const person = useSelfPerson(session?.user.id);
-  const age = person?.birthDate ? ageOn(new Date(`${person.birthDate}T12:00:00`)) : null;
+  const age = demo ? demo.age : person?.birthDate ? ageOn(new Date(`${person.birthDate}T12:00:00`)) : null;
   const first = def.kinds.find((k) => !k.parent)!;
   const tops = store.entries.filter((e) => def.kinds.some((k) => k.kind === e.kind && !k.parent));
   const pending = tops.filter((e) => def.kinds.find((k) => k.kind === e.kind)?.checkable && !e.done);
@@ -82,7 +86,7 @@ export function ModuleHomeCard({ def, today }: { def: ModuleDef; today: string }
           today={today}
           age={age}
           parent={null}
-          money={(n) => displayAmount(n, money.visible)}
+          money={(n) => displayAmount(n, demo ? true : money.visible)}
           onAdd={(kind) => router.push(moduleHref(def.code, kind))}
           onOpen={open}
           answer={answer}
